@@ -96,4 +96,57 @@ Cited so that anything on a slide can be defended if questioned.
 
 ---
 
+## Implementation sources
+
+### Fonts and PDF repair
+
+- **Avoiding Type 3 fonts in matplotlib.** Establishes that matplotlib defaults to
+  `pdf.fonttype = 3`, and that Type3 is bitmap-based and rejected by IEEE and AAAI
+  **even when embedded**. Source of the `pdf.fonttype`/`ps.fonttype = 42` remedy.
+  <http://phyletica.org/matplotlib-fonts/>
+
+- **Fonts in Matplotlib — official documentation.** Confirms `3` = Type 3,
+  `42` = TrueType, and the file-size trade-off for CJK glyph sets.
+  <https://matplotlib.org/stable/users/explain/text/fonts.html>
+
+- **Embedding fonts with Ghostscript.** `-dPDFSETTINGS=/prepress
+  -dEmbedAllFonts=true -dSubsetFonts=true -dMaxSubsetPct=100`, and the explicit
+  limitation that it does **not** fix Type 3 fonts and cannot help when a font is
+  absent from the system. This limitation defines our auto-fix boundary.
+  <http://matrossi.blogspot.com/2011/04/embedding-fonts-in-pdfs-using.html>
+
+- **LaTeX font not embedded — diagnosing with pdffonts.**
+  <https://thelatexlab.com/blog/latex-font-not-embedded-fix/>
+
+### Validation
+
+- **veraPDF CLI.** Reference PDF/A validator: `verapdf -f 1b --format json`.
+  No native Python SDK — invoke as a subprocess.
+  <https://docs.verapdf.org/cli/validation/>
+
+### Build and tooling
+
+- **Tectonic V2 CLI and `Tectonic.toml`.** Documents `tectonic -X build`,
+  `--keep-intermediates` (intermediates are held in memory by default), and that
+  **`synctex` defaults to `false`**.
+  <https://tectonic-typesetting.github.io/book/latest/ref/tectonic-toml.html>
+
+- **QProcess for external programs in PySide6.** The Qt-native non-blocking
+  pattern via `readyReadStandardOutput`, preferred over manual threading.
+  <https://www.pythonguis.com/tutorials/pyside6-qprocess-external-programs/>
+
+- **texoutparse.** Structured LaTeX log parsing into errors, warnings and bad
+  boxes. Written because LaTeX logs are unstructured and vary by package.
+  <https://github.com/inakleinbottle/texoutparse>
+
+- **SyncTeX.** Bidirectional source↔PDF synchronisation; `synctex view` and
+  `synctex edit`.
+  <https://github.com/jlaurens/synctex>
+
+- **Jinja2 custom delimiters for LaTeX.** Why the defaults collide with LaTeX
+  braces and the `\VAR{}` / `\BLOCK{}` convention used instead.
+  <https://jinja.palletsprojects.com/en/stable/templates/>
+
+---
+
 **Previous:** [← 08 · Presentation Outline](08-presentation-outline.md) · **Home:** [README](../README.md)
