@@ -48,6 +48,13 @@ You find out on deadline day, from an error message that explains nothing.
 
 Prarup catches it in about thirty lines of PyMuPDF, before you ever open the submission portal.
 
+There is a second, nastier variant. matplotlib's **default** export uses Type3
+fonts, which are bitmap-based and rejected by IEEE **even when correctly
+embedded** — and Ghostscript cannot repair them. So "fix the fonts" is really two
+problems with two different answers, and a tool that does not tell them apart
+will report successes it did not achieve. See
+[11 · Compliance Rules](docs/11-compliance-rules.md).
+
 ---
 
 ## Documentation
@@ -63,6 +70,15 @@ Prarup catches it in about thirty lines of PyMuPDF, before you ever open the sub
 | [07 · Scope & Timeline](docs/07-scope-and-timeline.md) | What we commit to in four weeks |
 | [08 · Presentation Outline](docs/08-presentation-outline.md) | Slide-by-slide deck content |
 | [09 · References](docs/09-references.md) | Sources for every claim we make |
+
+### Build documentation
+
+| Document | What's inside |
+|---|---|
+| [10 · Toolchain](docs/10-toolchain.md) | Every dependency, install commands, Tectonic and Jinja2 configuration traps |
+| [11 · Compliance Rules](docs/11-compliance-rules.md) | The rule catalogue — detection code, severity, and remedy for each check |
+| [12 · Implementation Notes](docs/12-implementation-notes.md) | QProcess compilation, SyncTeX, log parsing, font inspection |
+| [13 · Pitfalls](docs/13-pitfalls.md) | Silent failures, environment traps, demo rehearsal checklist |
 
 ---
 
