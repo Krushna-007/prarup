@@ -80,3 +80,14 @@ def test_errors_are_listed_before_warnings():
     issues = run_all_checks(FIXTURES / "eight_pages.pdf", Rules(page_limit=1))
     severities = [i.severity for i in issues]
     assert severities == sorted(severities, key=lambda s: s != "error")
+
+
+def test_unembedded_font_is_reported():
+    issues = check_fonts(FIXTURES / "unembedded.pdf")
+    assert [i.code for i in issues] == ["FONT-01"]
+    assert "Helvetica" in issues[0].message
+
+
+def test_unembedded_font_can_be_fixed():
+    """Unlike Type3, Ghostscript can embed a referenced font in place."""
+    assert check_fonts(FIXTURES / "unembedded.pdf")[0].can_fix is True
