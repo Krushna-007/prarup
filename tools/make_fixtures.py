@@ -89,6 +89,23 @@ def make_docx_with_image(path: Path) -> None:
         subprocess.run(["pandoc", str(md), "-o", str(path)], check=True, cwd=tmp)
 
 
+def make_unembedded_font(path: Path) -> None:
+    """Save a PDF that references a base-14 font without embedding it.
+
+    Viewers are expected to supply the base-14 fonts, so PyMuPDF does not
+    embed them. IEEE's archival system does not supply them, which is why
+    this is rejected.
+    """
+    import pymupdf
+
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 100), "Referenced but not embedded",
+                     fontname="helv", fontsize=14)
+    doc.save(path)
+    doc.close()
+
+
 def main() -> None:
     FIXTURES.mkdir(parents=True, exist_ok=True)
 
@@ -104,6 +121,7 @@ def main() -> None:
     make_blank_pages(FIXTURES / "eight_pages.pdf", 8)
 
     make_protected(FIXTURES / "protected.pdf")
+    make_unembedded_font(FIXTURES / "unembedded.pdf")
 
     make_docx_with_image(FIXTURES / "sample.docx")
 
