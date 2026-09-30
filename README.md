@@ -79,6 +79,7 @@ will report successes it did not achieve. See
 | [11 · Compliance Rules](docs/11-compliance-rules.md) | The rule catalogue — detection code, severity, and remedy for each check |
 | [12 · Implementation Notes](docs/12-implementation-notes.md) | QProcess compilation, SyncTeX, log parsing, font inspection |
 | [13 · Pitfalls](docs/13-pitfalls.md) | Silent failures, environment traps, demo rehearsal checklist |
+| [14 · How To Build It](docs/14-how-to-build.md) | Minimal design, walking skeleton, the first ten tests, design rules |
 
 ---
 
