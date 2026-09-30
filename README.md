@@ -118,7 +118,10 @@ poetry run prarup build paper.docx \
 poetry run prarup build paper.tex           # compile, verify
 poetry run prarup check paper.pdf           # verify an existing PDF
 poetry run prarup check paper.pdf --fix     # repair, then re-verify
+poetry run prarup-gui                       # the desktop window
 ```
+
+![The window, with a defect found](docs/images/window-with-issue.png)
 
 A `.docx` is converted to a body fragment, wrapped in the IEEE conference
 template, and compiled. A `.tex` is compiled as it stands, because there is no
@@ -140,16 +143,19 @@ repair it has not verified, and it never modifies the original.
 
 ## Status
 
-**v0.6.** Working from the command line: `.docx` and `.tex` input, IEEE template
-rendering, Tectonic compilation, font, page-limit and encryption checks, YAML
-rule presets, and Ghostscript repair.
+**v0.7.** Working: `.docx` and `.tex` input, IEEE template rendering, Tectonic
+compilation, font, page-limit and encryption checks, YAML rule presets,
+Ghostscript repair, and a PySide6 window over all of it.
 
-66 tests pass. Two carry most of the weight: one builds a real paper containing a
+**Python 3.11 to 3.13.** PySide6 publishes no wheels for 3.14 yet.
+
+77 tests pass, GUI included, headless. Two carry most of the weight: one builds a real paper containing a
 default matplotlib figure and confirms the defect is found in the compiled
 output, the other takes the `.docx` fixture all the way to a compliant IEEE PDF
 and checks the abstract still precedes the body.
 
-Not built yet: the Qt interface, the LLM advisory layer. See [14 · How To Build It](docs/14-how-to-build.md).
+Not built yet: the LLM advisory layer, and title/author/abstract fields in the
+window (the CLI takes them as flags). See [14 · How To Build It](docs/14-how-to-build.md).
 
 ---
 
