@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from prarup.checks import check_fonts
+from prarup.checks import check_fonts, check_page_count
+from prarup.models import Rules
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -30,3 +31,21 @@ def test_type3_is_not_also_reported_as_unembedded():
 def test_corrected_figure_is_clean():
     """pdf.fonttype = 42 is the fix, so the output must come back empty."""
     assert check_fonts(FIXTURES / "mpl_truetype.pdf") == []
+
+
+def test_paper_within_the_limit_is_clean():
+    assert check_page_count(FIXTURES / "six_pages.pdf", Rules(page_limit=6)) == []
+
+
+def test_paper_over_the_limit_is_reported():
+    issues = check_page_count(FIXTURES / "eight_pages.pdf", Rules(page_limit=6))
+    assert len(issues) == 1
+    assert issues[0].code == "GEOM-01"
+    assert "2 page" in issues[0].message
+
+
+def test_page_limit_is_a_warning_not_an_error():
+    """Being over the limit is for the author to fix, not us."""
+    issues = check_page_count(FIXTURES / "eight_pages.pdf", Rules(page_limit=6))
+    assert issues[0].severity == "warning"
+    assert issues[0].can_fix is False

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pymupdf
 
-from prarup.models import Issue
+from prarup.models import Issue, Rules
 
 
 def check_fonts(pdf_path: Path) -> list[Issue]:
@@ -52,3 +52,26 @@ def check_fonts(pdf_path: Path) -> list[Issue]:
 
     doc.close()
     return issues
+
+
+def check_page_count(pdf_path: Path, rules: Rules) -> list[Issue]:
+    """Report a paper that runs past the conference page limit.
+
+    Counted on the compiled document, not on word count. Resizing one
+    figure can move the page boundary, and no word count notices that.
+    """
+    doc = pymupdf.open(pdf_path)
+    pages = doc.page_count
+    doc.close()
+
+    if pages <= rules.page_limit:
+        return []
+
+    over = pages - rules.page_limit
+    plural = "s" if over > 1 else ""
+    return [Issue(
+        code="GEOM-01",
+        message=f"{over} page{plural} over the {rules.page_limit}-page limit",
+        severity="warning",
+        can_fix=False,
+    )]

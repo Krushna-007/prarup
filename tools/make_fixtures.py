@@ -28,6 +28,17 @@ def make_figure(path: Path, fonttype: int) -> None:
     plt.close(fig)
 
 
+def make_blank_pages(path: Path, count: int) -> None:
+    """Save a PDF with the given number of empty pages."""
+    import pymupdf
+
+    doc = pymupdf.open()
+    for _ in range(count):
+        doc.new_page()
+    doc.save(path)
+    doc.close()
+
+
 def main() -> None:
     FIXTURES.mkdir(parents=True, exist_ok=True)
 
@@ -37,6 +48,10 @@ def main() -> None:
 
     # fonttype 42 embeds TrueType outlines instead. This is the fix.
     make_figure(FIXTURES / "mpl_truetype.pdf", 42)
+
+    # for the page-limit check: one at the limit, one over it
+    make_blank_pages(FIXTURES / "six_pages.pdf", 6)
+    make_blank_pages(FIXTURES / "eight_pages.pdf", 8)
 
     print(f"wrote fixtures to {FIXTURES}")
 
