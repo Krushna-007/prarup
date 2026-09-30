@@ -111,11 +111,18 @@ brew install tectonic pandoc ghostscript
 ## Using it
 
 ```bash
-poetry run prarup build paper.docx     # convert, compile, verify
-poetry run prarup build paper.tex      # compile, verify
-poetry run prarup check paper.pdf      # verify an existing PDF
-poetry run prarup check paper.pdf --fix
+poetry run prarup build paper.docx \
+    --author "Krushna Parmar:DA-IICT" \
+    --abstract "A short abstract."          # convert, template, compile, verify
+
+poetry run prarup build paper.tex           # compile, verify
+poetry run prarup check paper.pdf           # verify an existing PDF
+poetry run prarup check paper.pdf --fix     # repair, then re-verify
 ```
+
+A `.docx` is converted to a body fragment, wrapped in the IEEE conference
+template, and compiled. A `.tex` is compiled as it stands, because there is no
+reliable way to separate an author's preamble from their body.
 
 ```
 paper.pdf: 1 error(s), 0 warning(s)
@@ -133,16 +140,16 @@ repair it has not verified, and it never modifies the original.
 
 ## Status
 
-**v0.5.** Working from the command line: `.docx` and `.tex` input, Tectonic
-compilation, font, page-limit and encryption checks, YAML rule presets, and
-Ghostscript repair.
+**v0.6.** Working from the command line: `.docx` and `.tex` input, IEEE template
+rendering, Tectonic compilation, font, page-limit and encryption checks, YAML
+rule presets, and Ghostscript repair.
 
-46 tests pass, including an end-to-end test that builds a real paper containing a
+66 tests pass. Two carry most of the weight: one builds a real paper containing a
 default matplotlib figure and confirms the defect is found in the compiled
-output.
+output, the other takes the `.docx` fixture all the way to a compliant IEEE PDF
+and checks the abstract still precedes the body.
 
-Not built yet: the Qt interface, the IEEE template renderer, the LLM advisory
-layer. See [14 · How To Build It](docs/14-how-to-build.md).
+Not built yet: the Qt interface, the LLM advisory layer. See [14 · How To Build It](docs/14-how-to-build.md).
 
 ---
 
