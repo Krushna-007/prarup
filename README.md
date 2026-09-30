@@ -98,6 +98,69 @@ will report successes it did not achieve. See
 ```bash
 poetry install
 poetry run python tools/make_fixtures.py     # generate test PDFs
+poetry run pytest                             # 46 tests
+```
+
+External tools: `tectonic` to compile, `pandoc` for `.docx`, `ghostscript` to
+repair fonts. On macOS:
+
+```bash
+brew install tectonic pandoc ghostscript
+```
+
+## Using it
+
+```bash
+poetry run prarup build paper.docx     # convert, compile, verify
+poetry run prarup build paper.tex      # compile, verify
+poetry run prarup check paper.pdf      # verify an existing PDF
+poetry run prarup check paper.pdf --fix
+```
+
+```
+paper.pdf: 1 error(s), 0 warning(s)
+
+  ERROR  FONT-02  EKKAYT+DejaVuSans is a Type3 bitmap font
+```
+
+Exit codes: `0` nothing blocking, `1` would be rejected, `2` the tool could not
+run. Usable as a gate in a submission script.
+
+`--fix` writes a repaired copy and re-runs every check on it. It never reports a
+repair it has not verified, and it never modifies the original.
+
+---
+
+## Status
+
+**v0.5.** Working from the command line: `.docx` and `.tex` input, Tectonic
+compilation, font, page-limit and encryption checks, YAML rule presets, and
+Ghostscript repair.
+
+46 tests pass, including an end-to-end test that builds a real paper containing a
+default matplotlib figure and confirms the defect is found in the compiled
+output.
+
+Not built yet: the Qt interface, the IEEE template renderer, the LLM advisory
+layer. See [14 · How To Build It](docs/14-how-to-build.md).
+
+---
+
+## Team
+
+| Name | Roll Number |
+|---|---|
+| Prateek Kalal | 202611009 |
+| Om Patel | 202611030 |
+| Krushna Parmar | 202611032 |
+
+---
+
+## Quick start
+
+```bash
+poetry install
+poetry run python tools/make_fixtures.py     # generate test PDFs
 poetry run pytest                             # 25 tests
 ```
 
