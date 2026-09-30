@@ -26,6 +26,11 @@ def docx_to_tex(docx_path: Path, out_dir: Path) -> Path:
     The argument has to be "." rather than a directory name. pandoc appends
     its own "media" folder to whatever you give it, so --extract-media=media
     produces media/media/rId9.png while the .tex refers to media/rId9.png.
+
+    --standalone is also required. Without it pandoc emits a fragment with
+    no \\documentclass and no document environment, which fails on the
+    first \\section. Once the IEEE template exists this becomes the body
+    that gets wrapped, but for now we need something that compiles.
     """
     if shutil.which("pandoc") is None:
         raise PandocNotFound(
@@ -40,6 +45,7 @@ def docx_to_tex(docx_path: Path, out_dir: Path) -> Path:
             "pandoc",
             str(docx_path.resolve()),
             "-t", "latex",
+            "--standalone",       # otherwise pandoc emits a bare fragment
             "--extract-media=.",
             "-o", tex_path.name,
         ],
@@ -54,13 +60,22 @@ def docx_to_tex(docx_path: Path, out_dir: Path) -> Path:
     return tex_path
 
 
-def find_custom_macros(tex_source: str) -> list[str]:
-    """Return the names of any custom macros defined in the source.
+# pandoc writes these into its own standalone preamble. They belong to
+# pandoc, not to the author, and warning about them is pure noise.
+PANDOC_MACROS = {
+    "tightlist", "xmpquote", "passthrough", "pandocbounded",
+    "real", "oldparagraph", "oldsubparagraph",
+}
 
-    pandoc cannot resolve these, so equations built from them may be lost
-    or corrupted. We warn rather than fail.
+
+def find_custom_macros(tex_source: str) -> list[str]:
+    """Return the author's own macro definitions found in the source.
+
+    pandoc cannot resolve custom macros, so equations built from them may
+    be lost or corrupted. The caller warns rather than failing.
     """
     import re
 
-    pattern = r"\\(?:new|renew|provide)command\s*\{?\\(\w+)"
-    return re.findall(pattern, tex_source)
+    pattern = r"\\(?:new|renew|provide)command\s*\*?\s*\{?\\(\w+)"
+    found = re.findall(pattern, tex_source)
+    return [name for name in found if name not in PANDOC_MACROS]

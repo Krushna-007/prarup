@@ -56,3 +56,32 @@ def test_custom_macros_are_detected():
 
 def test_plain_source_reports_no_macros():
     assert find_custom_macros(r"\section{Intro} some text") == []
+
+
+@needs_pandoc
+def test_output_is_a_standalone_document(tmp_path):
+    """pandoc -t latex emits a fragment by default, with no
+    \\documentclass and no document environment, so it cannot compile."""
+    tex = docx_to_tex(FIXTURES / "sample.docx", tmp_path)
+    source = tex.read_text()
+    assert r"\documentclass" in source
+    assert r"\begin{document}" in source
+
+
+@needs_pandoc
+@pytest.mark.skipif(shutil.which("tectonic") is None, reason="tectonic not installed")
+def test_converted_document_actually_compiles(tmp_path):
+    """The real check: does the .tex we produce build?"""
+    from prarup.compile import compile_pdf
+
+    tex = docx_to_tex(FIXTURES / "sample.docx", tmp_path)
+    pdf, log = compile_pdf(tex, tmp_path)
+    assert pdf.exists(), f"compilation failed:\n{log}"
+
+
+@needs_pandoc
+def test_pandoc_own_macros_are_not_reported(tmp_path):
+    """pandoc's standalone preamble defines tightlist and friends. Those
+    are not the author's macros and must not be warned about."""
+    tex = docx_to_tex(FIXTURES / "sample.docx", tmp_path)
+    assert find_custom_macros(tex.read_text()) == []
