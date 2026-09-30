@@ -1,0 +1,32 @@
+[project]
+name = "prarup"
+version = "0.1.0"
+description = "Pre-flight compliance checker for research paper submissions"
+authors = [
+    { name = "Prateek Kalal" },
+    { name = "Om Patel" },
+    { name = "Krushna Parmar" },
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pymupdf (>=1.28)",
+    "pyyaml (>=6.0)",
+]
+
+[project.scripts]
+prarup = "prarup.main:main"
+
+[tool.poetry]
+package-mode = true
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0"
+matplotlib = ">=3.8"          # only used by tools/make_fixtures.py
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"

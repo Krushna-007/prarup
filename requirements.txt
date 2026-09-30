@@ -1,4 +1,0 @@
-PyMuPDF>=1.28
-PyYAML>=6.0
-pytest>=8.0
-matplotlib>=3.8      # only used by tools/make_fixtures.py
