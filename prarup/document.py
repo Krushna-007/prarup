@@ -37,6 +37,20 @@ def _promote_headings(body: str) -> str:
     return body
 
 
+# \begin{figure} with no placement and no star. LaTeX may then float it
+# to the top of the column, which in IEEEtran puts it above the abstract.
+_BARE_FIGURE = re.compile(r"\\begin\{figure\}(?!\*)(?!\[)")
+
+
+def _place_floats(body: str) -> str:
+    """Give pandoc's figures a placement specifier.
+
+    Only bare \\begin{figure} is touched. An explicit placement is the
+    author's choice, and figure* spans both columns under different rules.
+    """
+    return _BARE_FIGURE.sub(r"\\begin{figure}[htbp]", body)
+
+
 def document_from_latex(
     fragment: str,
     title: str = "",
@@ -57,6 +71,8 @@ def document_from_latex(
             title = match.group("title").strip()
             body = body[: match.start()] + body[match.end():]
             body = _promote_headings(body)
+
+    body = _place_floats(body)
 
     return Document(
         title=title,

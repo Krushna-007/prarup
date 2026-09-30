@@ -85,3 +85,18 @@ def test_pandoc_own_macros_are_not_reported(tmp_path):
     are not the author's macros and must not be warned about."""
     tex = docx_to_tex(FIXTURES / "sample.docx", tmp_path)
     assert find_custom_macros(tex.read_text()) == []
+
+
+@needs_pandoc
+def test_fragment_mode_omits_the_preamble(tmp_path):
+    """The build pipeline wraps the body itself, so it wants a fragment."""
+    tex = docx_to_tex(FIXTURES / "sample.docx", tmp_path, standalone=False)
+    source = tex.read_text()
+    assert r"\documentclass" not in source
+    assert r"\section{Sample Paper}" in source
+
+
+@needs_pandoc
+def test_fragment_mode_still_extracts_media(tmp_path):
+    docx_to_tex(FIXTURES / "sample.docx", tmp_path, standalone=False)
+    assert list(tmp_path.rglob("*.png")), "media was not extracted"

@@ -18,7 +18,9 @@ from prarup.convert import (
     find_custom_macros,
 )
 from prarup.fix import GhostscriptNotFound, RepairFailed, embed_fonts
-from prarup.models import Rules
+from prarup.document import document_from_latex
+from prarup.models import Author, Rules
+from prarup.render import render
 
 PRESETS = Path(__file__).parent / "presets"
 
@@ -37,19 +39,45 @@ def load_rules(args) -> Rules:
     return rules
 
 
-def prepare_tex(source: Path, out_dir: Path) -> Path:
-    """Return a .tex path, converting from .docx first if needed."""
+def parse_authors(values: list[str] | None) -> list[Author]:
+    """Turn --author "Name:Affiliation" arguments into Author objects."""
+    authors = []
+    for value in values or []:
+        name, _, affiliation = value.partition(":")
+        authors.append(Author(name.strip(), affiliation.strip()))
+    return authors
+
+
+def prepare_tex(source: Path, out_dir: Path, args) -> Path:
+    """Return a .tex path ready to compile.
+
+    A .docx becomes a body fragment, is wrapped in the target template,
+    and is written back out. A .tex is compiled as it stands, because we
+    have no reliable way to separate an author's preamble from their body.
+    """
     if source.suffix.lower() != ".docx":
         return source
 
-    tex_path = docx_to_tex(source, out_dir)
-    macros = find_custom_macros(tex_path.read_text())
+    fragment_path = docx_to_tex(source, out_dir, standalone=False)
+    fragment = fragment_path.read_text()
+
+    macros = find_custom_macros(fragment)
     if macros:
         print(
             "warning: custom macros may not have survived conversion: "
             + ", ".join(sorted(set(macros))),
             file=sys.stderr,
         )
+
+    document = document_from_latex(
+        fragment,
+        title=args.title or "",
+        authors=parse_authors(args.author),
+        abstract=args.abstract or "",
+    )
+
+    tex_path = out_dir / (source.stem + ".tex")
+    tex_path.write_text(render(document, template=args.template))
     return tex_path
 
 
@@ -86,6 +114,12 @@ def build_parser() -> argparse.ArgumentParser:
                        help="repair what can be repaired, then re-check")
         if name == "build":
             p.add_argument("--outdir", type=Path, default=Path("build"))
+            p.add_argument("--template", default="ieee",
+                           help="output template (default: ieee)")
+            p.add_argument("--title", help="paper title (default: first heading)")
+            p.add_argument("--author", action="append", metavar="NAME:AFFILIATION",
+                           help="repeat for each author")
+            p.add_argument("--abstract", help="abstract text")
 
     return parser
 
@@ -103,7 +137,7 @@ def main() -> int:
         pdf_path = args.source
     else:
         try:
-            tex_path = prepare_tex(args.source, args.outdir)
+            tex_path = prepare_tex(args.source, args.outdir, args)
             pdf_path, log = compile_pdf(tex_path, args.outdir)
         except (TectonicNotFound, PandocNotFound, ConversionFailed) as exc:
             print(f"error: {exc}", file=sys.stderr)

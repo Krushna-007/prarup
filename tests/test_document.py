@@ -44,3 +44,25 @@ def test_a_fragment_with_no_headings_keeps_its_body():
     doc = document_from_latex("Just some text.")
     assert doc.title == ""
     assert doc.body.strip() == "Just some text."
+
+
+def test_figures_get_a_placement_specifier():
+    """pandoc writes a bare \\begin{figure}, which LaTeX is free to float to
+    the very top of the column. In IEEEtran that lands it above the
+    abstract, which is wrong on the page."""
+    doc = document_from_latex("\\begin{figure}\n\\centering\nX\n\\end{figure}")
+    assert r"\begin{figure}[htbp]" in doc.body
+
+
+def test_existing_placement_is_left_alone():
+    """If the author already chose a placement, respect it."""
+    doc = document_from_latex("\\begin{figure}[t]\n\\centering\nX\n\\end{figure}")
+    assert r"\begin{figure}[t]" in doc.body
+    assert r"\begin{figure}[htbp]" not in doc.body
+
+
+def test_starred_figures_are_left_alone():
+    """figure* spans both columns and its placement rules differ."""
+    doc = document_from_latex("\\begin{figure*}\nX\n\\end{figure*}")
+    assert r"\begin{figure*}" in doc.body
+    assert "htbp" not in doc.body

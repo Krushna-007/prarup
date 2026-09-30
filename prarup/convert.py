@@ -16,7 +16,7 @@ class ConversionFailed(Exception):
     """Raised when pandoc runs but reports an error."""
 
 
-def docx_to_tex(docx_path: Path, out_dir: Path) -> Path:
+def docx_to_tex(docx_path: Path, out_dir: Path, standalone: bool = True) -> Path:
     """Convert a .docx to LaTeX and return the path of the .tex file.
 
     --extract-media is not optional. Without it pandoc still writes
@@ -27,10 +27,10 @@ def docx_to_tex(docx_path: Path, out_dir: Path) -> Path:
     its own "media" folder to whatever you give it, so --extract-media=media
     produces media/media/rId9.png while the .tex refers to media/rId9.png.
 
-    --standalone is also required. Without it pandoc emits a fragment with
-    no \\documentclass and no document environment, which fails on the
-    first \\section. Once the IEEE template exists this becomes the body
-    that gets wrapped, but for now we need something that compiles.
+    standalone controls whether pandoc wraps the output in a document
+    preamble. Pass True to get something that compiles on its own; pass
+    False to get a body fragment for the IEEE template to wrap, which is
+    what the build pipeline uses.
     """
     if shutil.which("pandoc") is None:
         raise PandocNotFound(
@@ -45,7 +45,7 @@ def docx_to_tex(docx_path: Path, out_dir: Path) -> Path:
             "pandoc",
             str(docx_path.resolve()),
             "-t", "latex",
-            "--standalone",       # otherwise pandoc emits a bare fragment
+            *(["--standalone"] if standalone else []),
             "--extract-media=.",
             "-o", tex_path.name,
         ],
