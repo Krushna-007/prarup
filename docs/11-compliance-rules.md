@@ -21,6 +21,17 @@ Ghostscript's own documentation is explicit: `-dEmbedAllFonts=true`
 *"does not fix Type 3 fonts, and will not help if a font is entirely missing from
 the system."*
 
+**Measured, not assumed.** `tests/test_fix.py` runs Ghostscript over both fixtures
+and asserts the outcome in each direction: the referenced font comes back
+embedded, and the Type3 font comes back still Type3. Ghostscript exits zero in
+both cases, which is why the exit code is never treated as evidence.
+
+A further detail found only by running PyMuPDF against real files: **a Type3 font
+also reports `ext == "n/a"`**, because its glyphs are inline procedures with no
+external font file. Testing for `"n/a"` first would report every Type3 font twice
+and send the author to a repair that cannot work. Type3 is therefore matched
+first.
+
 So the auto-fix button is honest only if it distinguishes these two cases. A tool
 that claims to "fix fonts" and silently fails on Type3 is worse than one that
 says *"I cannot fix this, here is the two-line change to your plotting script."*
