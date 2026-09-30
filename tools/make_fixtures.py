@@ -39,6 +39,25 @@ def make_blank_pages(path: Path, count: int) -> None:
     doc.close()
 
 
+def make_protected(path: Path) -> None:
+    """Save a PDF with an owner password set.
+
+    Any encryption at all makes a file non-compliant, even when it can
+    still be opened without a password.
+    """
+    import pymupdf
+
+    doc = pymupdf.open()
+    doc.new_page()
+    doc.save(
+        path,
+        encryption=pymupdf.PDF_ENCRYPT_AES_256,
+        owner_pw="owner",
+        permissions=pymupdf.PDF_PERM_PRINT,
+    )
+    doc.close()
+
+
 def main() -> None:
     FIXTURES.mkdir(parents=True, exist_ok=True)
 
@@ -52,6 +71,8 @@ def main() -> None:
     # for the page-limit check: one at the limit, one over it
     make_blank_pages(FIXTURES / "six_pages.pdf", 6)
     make_blank_pages(FIXTURES / "eight_pages.pdf", 8)
+
+    make_protected(FIXTURES / "protected.pdf")
 
     print(f"wrote fixtures to {FIXTURES}")
 

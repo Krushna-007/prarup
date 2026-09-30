@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from prarup.checks import check_fonts, check_page_count
+from prarup.checks import check_fonts, check_page_count, check_security
 from prarup.models import Rules
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -49,3 +49,18 @@ def test_page_limit_is_a_warning_not_an_error():
     issues = check_page_count(FIXTURES / "eight_pages.pdf", Rules(page_limit=6))
     assert issues[0].severity == "warning"
     assert issues[0].can_fix is False
+
+
+def test_plain_pdf_has_no_security_problem():
+    assert check_security(FIXTURES / "six_pages.pdf") == []
+
+
+def test_encrypted_pdf_is_reported():
+    issues = check_security(FIXTURES / "protected.pdf")
+    assert len(issues) == 1
+    assert issues[0].code == "DOC-01"
+
+
+def test_encryption_can_be_removed_automatically():
+    """Stripping encryption is a safe, deterministic repair."""
+    assert check_security(FIXTURES / "protected.pdf")[0].can_fix is True

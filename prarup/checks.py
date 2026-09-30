@@ -75,3 +75,28 @@ def check_page_count(pdf_path: Path, rules: Rules) -> list[Issue]:
         severity="warning",
         can_fix=False,
     )]
+
+
+def check_security(pdf_path: Path) -> list[Issue]:
+    """Report encryption or permission flags.
+
+    A submission PDF must carry no password and no permission
+    restrictions, even ones that still allow the file to be opened.
+    """
+    doc = pymupdf.open(pdf_path)
+    # Not is_encrypted. That reports whether the document is still locked,
+    # and it goes False as soon as the file opens with an empty password,
+    # which is exactly the case we need to catch. The metadata entry says
+    # whether encryption is present at all.
+    encryption = doc.metadata.get("encryption")
+    doc.close()
+
+    if encryption is None:
+        return []
+
+    return [Issue(
+        code="DOC-01",
+        message=f"the document is encrypted ({encryption})",
+        severity="error",
+        can_fix=True,
+    )]
