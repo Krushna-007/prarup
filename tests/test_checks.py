@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from prarup.checks import check_fonts, check_page_count, check_security
+from prarup.checks import check_fonts, check_page_count, check_security, run_all_checks
 from prarup.models import Rules
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -64,3 +64,19 @@ def test_encrypted_pdf_is_reported():
 def test_encryption_can_be_removed_automatically():
     """Stripping encryption is a safe, deterministic repair."""
     assert check_security(FIXTURES / "protected.pdf")[0].can_fix is True
+
+
+def test_run_all_checks_collects_from_every_check():
+    issues = run_all_checks(FIXTURES / "mpl_type3.pdf", Rules())
+    assert "FONT-02" in [i.code for i in issues]
+
+
+def test_run_all_checks_returns_nothing_for_a_clean_file():
+    assert run_all_checks(FIXTURES / "six_pages.pdf", Rules(page_limit=6)) == []
+
+
+def test_errors_are_listed_before_warnings():
+    """The report is read top down, so the blocking items come first."""
+    issues = run_all_checks(FIXTURES / "eight_pages.pdf", Rules(page_limit=1))
+    severities = [i.severity for i in issues]
+    assert severities == sorted(severities, key=lambda s: s != "error")

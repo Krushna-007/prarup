@@ -100,3 +100,19 @@ def check_security(pdf_path: Path) -> list[Issue]:
         severity="error",
         can_fix=True,
     )]
+
+
+def run_all_checks(pdf_path: Path, rules: Rules) -> list[Issue]:
+    """Run every check and return the findings, errors first.
+
+    Adding a new check means writing the function above and adding one
+    line here. That is the whole extension mechanism.
+    """
+    issues = []
+    issues += check_fonts(pdf_path)
+    issues += check_page_count(pdf_path, rules)
+    issues += check_security(pdf_path)
+
+    # errors before warnings, so the blocking items are read first
+    issues.sort(key=lambda issue: issue.severity != "error")
+    return issues
