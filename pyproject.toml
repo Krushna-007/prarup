@@ -19,6 +19,7 @@ dependencies = [
 
 [project.scripts]
 prarup = "prarup.main:main"
+prarup-gui = "prarup.gui:main"
 
 [tool.poetry]
 package-mode = true
