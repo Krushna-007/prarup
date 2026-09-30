@@ -151,21 +151,44 @@ the abstraction has leaked.
 
 ## Asset handling
 
-`.docx` figures are **not** extracted automatically by pandoc. Pull them out
-explicitly and rewrite the references:
+**Corrected after testing.** An earlier draft of this document said pandoc does
+not extract `.docx` media and that you must unzip `word/media/` yourself. That is
+half right, and the half that is wrong matters.
 
-```python
-with zipfile.ZipFile(docx) as z:
-    for n in z.namelist():
-        if n.startswith("word/media/"):
-            z.extract(n, assets_dir)
+pandoc emits `\includegraphics{media/rId9.png}` for every image whether or not
+you ask for extraction. Without `--extract-media` it simply never writes the file
+that reference points at, so the document compiles with the figures silently
+absent. With the flag, it writes them.
+
+Two details, both measured rather than read:
+
+```bash
+pandoc paper.docx -t latex --standalone --extract-media=. -o paper.tex
 ```
 
-Then emit `\includegraphics{assets/image1.png}` in the LaTeX writer. A conversion
-that silently drops figures is the most common way this pipeline appears to work
-while producing a useless document.
+- **`--extract-media=.`, not a directory name.** pandoc appends its own `media`
+  folder to whatever you give it, so `--extract-media=media` writes
+  `media/media/rId9.png` while the `.tex` refers to `media/rId9.png`.
+- **`--standalone` is required.** Without it pandoc emits a fragment with no
+  `\documentclass` and no document environment, and compilation dies on the first
+  `\section`.
 
----
+The test that catches both is the one that checks every reference resolves:
+
+```python
+refs = re.findall(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}", tex.read_text())
+for ref in refs:
+    assert (out_dir / ref).exists()
+```
+
+A second test compiles the converted file, which is the only way the missing
+`--standalone` shows up at all.
+
+### pandoc defines its own macros
+
+`--standalone` writes `tightlist`, `xmpquote`, `passthrough` and others into the
+preamble. These are pandoc's, not the author's, and warning about them is noise.
+Filter them out before reporting custom macros.
 
 ## Custom macros break conversion
 
