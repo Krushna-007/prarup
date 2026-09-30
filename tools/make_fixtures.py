@@ -58,6 +58,37 @@ def make_protected(path: Path) -> None:
     doc.close()
 
 
+def make_docx_with_image(path: Path) -> None:
+    """Build a .docx containing one embedded image, using pandoc.
+
+    Skipped when pandoc is absent; the tests that need it skip too.
+    """
+    import shutil
+    import subprocess
+    import tempfile
+
+    if shutil.which("pandoc") is None:
+        print("pandoc not found, skipping the .docx fixture")
+        return
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        png = tmp / "plot.png"
+        fig, ax = plt.subplots(figsize=(3, 2))
+        ax.plot([0, 1, 2], [0, 1, 4])
+        fig.savefig(png, dpi=100)
+        plt.close(fig)
+
+        md = tmp / "src.md"
+        md.write_text(
+            "# Sample Paper\n\n"
+            "## Introduction\n\nSome introductory text.\n\n"
+            f"![A plot]({png.name})\n\n"
+            "## Results\n\nSome results.\n"
+        )
+        subprocess.run(["pandoc", str(md), "-o", str(path)], check=True, cwd=tmp)
+
+
 def main() -> None:
     FIXTURES.mkdir(parents=True, exist_ok=True)
 
@@ -73,6 +104,8 @@ def main() -> None:
     make_blank_pages(FIXTURES / "eight_pages.pdf", 8)
 
     make_protected(FIXTURES / "protected.pdf")
+
+    make_docx_with_image(FIXTURES / "sample.docx")
 
     print(f"wrote fixtures to {FIXTURES}")
 
