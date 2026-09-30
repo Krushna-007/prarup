@@ -43,3 +43,24 @@ def test_report_names_the_problem(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "FONT-02" in out
     assert "Type3" in out
+
+
+def test_preset_supplies_the_page_limit(monkeypatch, capsys):
+    """The shipped ieee preset sets 6 pages, so an 8 page file warns."""
+    run(monkeypatch, "check", str(FIXTURES / "eight_pages.pdf"))
+    assert "GEOM-01" in capsys.readouterr().out
+
+
+def test_explicit_page_limit_overrides_the_preset(monkeypatch, capsys):
+    run(monkeypatch, "check", str(FIXTURES / "eight_pages.pdf"),
+        "--page-limit", "10")
+    assert "all checks passed" in capsys.readouterr().out
+
+
+def test_bad_rules_file_exits_two(monkeypatch, capsys, tmp_path):
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("page_limmit: 4\n")
+    code = run(monkeypatch, "check", str(FIXTURES / "six_pages.pdf"),
+               "--rules", str(bad))
+    assert code == 2
+    assert "page_limmit" in capsys.readouterr().err
