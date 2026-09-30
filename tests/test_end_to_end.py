@@ -60,3 +60,39 @@ def test_the_same_paper_with_a_corrected_figure_passes(tmp_path):
     issues = run_all_checks(pdf, Rules())
 
     assert [i.code for i in issues] == []
+
+
+needs_pandoc = pytest.mark.skipif(
+    shutil.which("pandoc") is None, reason="pandoc not installed"
+)
+
+
+@needs_tectonic
+@needs_pandoc
+def test_docx_becomes_a_compliant_ieee_paper(tmp_path):
+    """The full pipeline: .docx in, checked IEEE PDF out."""
+    from prarup.checks import run_all_checks
+    from prarup.convert import docx_to_tex
+    from prarup.document import document_from_latex
+    from prarup.models import Author, Rules
+    from prarup.render import render
+
+    fragment = docx_to_tex(FIXTURES / "sample.docx", tmp_path, standalone=False)
+    document = document_from_latex(
+        fragment.read_text(),
+        authors=[Author("Krushna Parmar", "DA-IICT")],
+        abstract="A short abstract.",
+    )
+
+    tex_path = tmp_path / "out.tex"
+    tex_path.write_text(render(document))
+    pdf, log = compile_pdf(tex_path, tmp_path)
+
+    assert pdf.exists(), f"compilation failed:\n{log}"
+    assert run_all_checks(pdf, Rules()) == []
+
+    import pymupdf
+    text = pymupdf.open(pdf)[0].get_text()
+    # the abstract must precede the body, not be pushed down by a float
+    assert text.index("Abstract") < text.index("Introduction")
+    assert "Krushna Parmar" in text
