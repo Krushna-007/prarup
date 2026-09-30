@@ -93,7 +93,39 @@ will report successes it did not achieve. See
 
 ---
 
+## Quick start
+
+```bash
+poetry install
+poetry run python tools/make_fixtures.py     # generate test PDFs
+poetry run pytest                             # 25 tests
+```
+
+Check a paper:
+
+```bash
+poetry run prarup build paper.tex     # compile, then verify
+poetry run prarup check paper.pdf     # verify an existing PDF
+```
+
+```
+paper.pdf: 1 error(s), 0 warning(s)
+
+  ERROR  FONT-02  EKKAYT+DejaVuSans is a Type3 bitmap font
+```
+
+Exit codes: `0` nothing blocking, `1` would be rejected, `2` the tool could not
+run. Usable as a gate in a submission script.
+
+---
+
 ## Status
 
-**Proposal stage.** Architecture and scope finalised; implementation begins after review.
+**v0.1 works.** The command line tool compiles a `.tex` and reports the font,
+page-limit and encryption defects that block submission. 25 tests pass, including
+an end-to-end test that builds a real paper containing a default matplotlib
+figure and confirms the defect is detected in the compiled output.
+
+Not built yet: `.docx` input, the Qt interface, automatic repair, the LLM
+advisory layer. See [14 · How To Build It](docs/14-how-to-build.md).
 
