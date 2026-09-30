@@ -1,5 +1,6 @@
 """Tests for the command line behaviour."""
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -64,3 +65,29 @@ def test_bad_rules_file_exits_two(monkeypatch, capsys, tmp_path):
                "--rules", str(bad))
     assert code == 2
     assert "page_limmit" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(shutil.which("gs") is None, reason="ghostscript not installed")
+def test_fix_flag_repairs_and_rechecks(monkeypatch, capsys, tmp_path):
+    """--fix must verify its own work, not assume it."""
+    target = tmp_path / "unembedded.pdf"
+    shutil.copy(FIXTURES / "unembedded.pdf", target)
+
+    code = run(monkeypatch, "check", str(target), "--fix")
+    out = capsys.readouterr().out
+
+    assert "repaired ->" in out
+    assert "all checks passed" in out
+    assert code == 0
+
+
+@pytest.mark.skipif(shutil.which("gs") is None, reason="ghostscript not installed")
+def test_fix_does_not_claim_success_on_type3(monkeypatch, capsys, tmp_path):
+    """Type3 is unfixable, so --fix must still report it and exit 1."""
+    target = tmp_path / "type3.pdf"
+    shutil.copy(FIXTURES / "mpl_type3.pdf", target)
+
+    code = run(monkeypatch, "check", str(target), "--fix")
+
+    assert "FONT-02" in capsys.readouterr().out
+    assert code == 1

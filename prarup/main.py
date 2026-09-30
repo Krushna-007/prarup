@@ -17,6 +17,7 @@ from prarup.convert import (
     docx_to_tex,
     find_custom_macros,
 )
+from prarup.fix import GhostscriptNotFound, RepairFailed, embed_fonts
 from prarup.models import Rules
 
 PRESETS = Path(__file__).parent / "presets"
@@ -81,6 +82,8 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--preset", default="ieee", help="preset name (default: ieee)")
         p.add_argument("--rules", type=Path, help="path to a rules YAML file")
         p.add_argument("--page-limit", type=int, help="override the page limit")
+        p.add_argument("--fix", action="store_true",
+                       help="repair what can be repaired, then re-check")
         if name == "build":
             p.add_argument("--outdir", type=Path, default=Path("build"))
 
@@ -115,6 +118,21 @@ def main() -> int:
         return 2
 
     issues = run_all_checks(pdf_path, rules)
+
+    if args.fix and any(i.can_fix for i in issues):
+        fixed_path = pdf_path.with_name(pdf_path.stem + "-fixed.pdf")
+        try:
+            embed_fonts(pdf_path, fixed_path)
+        except (GhostscriptNotFound, RepairFailed) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+        # Never trust the exit code. Ghostscript returns zero on files it
+        # did not change, so the only proof of a repair is a fresh check.
+        issues = run_all_checks(fixed_path, rules)
+        print(f"repaired -> {fixed_path}\n")
+        pdf_path = fixed_path
+
     print_report(issues, pdf_path)
 
     # non-zero when something would block submission, so this can gate a script
