@@ -45,11 +45,28 @@ class Rules:
 
 
 @dataclass
+class Author:
+    """One author and where they work."""
+
+    name: str
+    affiliation: str = ""
+
+
+@dataclass
 class Document:
-    """A manuscript, independent of the file it came from."""
+    """A manuscript, independent of the file it came from.
+
+    body holds LaTeX rather than a parsed section tree. Parsing LaTeX into
+    a full structure is a large job on its own and buys us nothing here:
+    every input path already produces LaTeX, and the template only needs
+    to wrap it. Title, authors and abstract are pulled out separately
+    because IEEEtran needs them in specific commands.
+    """
 
     title: str = ""
     authors: list = field(default_factory=list)
     abstract: str = ""
-    sections: list = field(default_factory=list)
+    keywords: str = ""
+    body: str = ""
+    bibliography: str = ""
     figures: list = field(default_factory=list)
