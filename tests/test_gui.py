@@ -110,3 +110,69 @@ def test_build_paper_takes_docx_all_the_way(tmp_path):
     )
     assert pdf.exists()
     assert issues == []
+
+
+# ------------------------------------------------------------- metadata form
+
+def test_authors_table_starts_with_one_empty_row(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+    assert window.author_table.rowCount() == 1
+
+
+def test_adding_a_row_grows_the_table(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.add_author_row()
+    assert window.author_table.rowCount() == 2
+
+
+def test_the_last_row_cannot_be_removed(qtbot):
+    """Removing every row leaves no way to type an author back in."""
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.remove_author_row()
+    assert window.author_table.rowCount() == 1
+
+
+def test_typed_authors_are_collected(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.set_authors([("Krushna Parmar", "DA-IICT"), ("Om Patel", "DA-IICT")])
+
+    authors = window.collect_authors()
+    assert [a.name for a in authors] == ["Krushna Parmar", "Om Patel"]
+    assert authors[0].affiliation == "DA-IICT"
+
+
+def test_blank_author_rows_are_ignored(qtbot):
+    """An empty row would render as an empty IEEEauthorblock."""
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.set_authors([("Krushna Parmar", "DA-IICT"), ("", ""), ("  ", "X")])
+    assert len(window.collect_authors()) == 1
+
+
+def test_metadata_reaches_the_document(tmp_path):
+    """Typed fields must end up in the rendered paper."""
+    from prarup.render import render
+    from prarup.gui import build_paper
+    from prarup.models import Author
+
+    pdf, _ = build_paper(
+        FIXTURES / "sample.docx", tmp_path, "ieee", Rules(),
+        title="A Better Title",
+        authors=[Author("Krushna Parmar", "DA-IICT")],
+        abstract="The abstract text.",
+    )
+    tex = (tmp_path / "sample.tex").read_text()
+    assert r"\title{A Better Title}" in tex
+    assert r"\IEEEauthorblockN{Krushna Parmar}" in tex
+    assert "The abstract text." in tex
+
+
+def test_empty_title_still_falls_back_to_the_first_heading(tmp_path):
+    from prarup.gui import build_paper
+
+    build_paper(FIXTURES / "sample.docx", tmp_path, "ieee", Rules())
+    assert r"\title{Sample Paper}" in (tmp_path / "sample.tex").read_text()
