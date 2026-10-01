@@ -33,7 +33,9 @@ def test_remaining_headings_are_promoted_one_level():
     assert r"\subsection{Introduction}" not in doc.body
 
 
-def test_an_explicit_title_wins_and_nothing_is_promoted():
+def test_a_lone_section_with_no_subsections_is_kept():
+    """One \\section and nothing nested is a real section, not a title
+    wrapper, so it stays even when a title is supplied."""
     source = r"\section{Introduction}" "\n\nText."
     doc = document_from_latex(source, title="My Real Title")
     assert doc.title == "My Real Title"
@@ -66,3 +68,36 @@ def test_starred_figures_are_left_alone():
     doc = document_from_latex("\\begin{figure*}\nX\n\\end{figure*}")
     assert r"\begin{figure*}" in doc.body
     assert "htbp" not in doc.body
+
+
+def test_a_lone_top_heading_is_consumed_even_with_an_explicit_title():
+    """A .docx whose only top-level heading is the paper name must not
+    render that heading as section I, whatever title the user typed."""
+    source = (
+        r"\section{Sample Paper}\label{s}" "\n\n"
+        r"\subsection{Introduction}\label{i}" "\n\nText.\n"
+    )
+    doc = document_from_latex(source, title="A Better Title")
+    assert doc.title == "A Better Title"
+    assert "Sample Paper" not in doc.body
+    assert r"\section{Introduction}" in doc.body
+
+
+def test_several_top_level_sections_are_left_alone():
+    """Here the sections are real content, not a document title."""
+    source = (
+        r"\section{Introduction}" "\n\nText.\n\n"
+        r"\section{Results}" "\n\nMore.\n"
+    )
+    doc = document_from_latex(source, title="My Paper")
+    assert r"\section{Introduction}" in doc.body
+    assert r"\section{Results}" in doc.body
+
+
+def test_several_top_level_sections_with_no_title_keeps_them_all():
+    """Nothing to promote, and the first section is not a title."""
+    source = r"\section{Introduction}" "\n\nA.\n\n" r"\section{Results}" "\n\nB.\n"
+    doc = document_from_latex(source)
+    assert doc.title == ""
+    assert r"\section{Introduction}" in doc.body
+    assert r"\section{Results}" in doc.body

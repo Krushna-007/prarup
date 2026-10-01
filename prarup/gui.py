@@ -15,11 +15,17 @@ from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QFileDialog,
+    QFormLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QPlainTextEdit,
     QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -29,7 +35,7 @@ from prarup.compile import compile_pdf
 from prarup.convert import docx_to_tex
 from prarup.document import document_from_latex
 from prarup.fix import embed_fonts
-from prarup.models import Rules
+from prarup.models import Author, Rules
 from prarup.render import render
 
 
@@ -40,17 +46,31 @@ def format_issue(issue) -> str:
     return f"{label}   {issue.code}   {issue.message}{suffix}"
 
 
-def build_paper(source: Path, out_dir: Path, template: str, rules: Rules):
+def build_paper(
+    source: Path,
+    out_dir: Path,
+    template: str,
+    rules: Rules,
+    title: str = "",
+    authors: list | None = None,
+    abstract: str = "",
+):
     """Run the whole pipeline. Returns (pdf_path, issues).
 
     Same sequence the command line uses, kept in one place so the window
-    and the CLI cannot drift apart.
+    and the CLI cannot drift apart. A blank title falls back to the first
+    heading in the document.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if source.suffix.lower() == ".docx":
         fragment = docx_to_tex(source, out_dir, standalone=False)
-        document = document_from_latex(fragment.read_text())
+        document = document_from_latex(
+            fragment.read_text(),
+            title=title,
+            authors=authors or [],
+            abstract=abstract,
+        )
         tex_path = out_dir / (source.stem + ".tex")
         tex_path.write_text(render(document, template=template))
     elif source.suffix.lower() == ".pdf":
@@ -71,17 +91,22 @@ class BuildWorker(QThread):
     done = Signal(object, object)   # pdf_path, issues
     failed = Signal(str)
 
-    def __init__(self, source: Path, out_dir: Path, template: str, rules: Rules):
+    def __init__(self, source: Path, out_dir: Path, template: str,
+                 rules: Rules, title: str, authors: list, abstract: str):
         super().__init__()
         self.source = source
         self.out_dir = out_dir
         self.template = template
         self.rules = rules
+        self.title = title
+        self.authors = authors
+        self.abstract = abstract
 
     def run(self) -> None:
         try:
             pdf_path, issues = build_paper(
-                self.source, self.out_dir, self.template, self.rules
+                self.source, self.out_dir, self.template, self.rules,
+                title=self.title, authors=self.authors, abstract=self.abstract,
             )
         except Exception as exc:              # noqa: BLE001 - shown to the user
             self.failed.emit(str(exc))
@@ -95,7 +120,7 @@ class MainWindow(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Prarup")
-        self.resize(1200, 780)
+        self.resize(1480, 820)
 
         self.source: Path | None = None
         self.pdf_path: Path | None = None
@@ -116,6 +141,58 @@ class MainWindow(QWidget):
         top.addWidget(self.build_button)
         top.addStretch()
         top.addWidget(self.status)
+
+        # ---- metadata the source file cannot supply ----
+        self.title_edit = QLineEdit()
+        self.title_edit.setPlaceholderText("leave blank to use the first heading")
+
+        self.author_table = QTableWidget(0, 2)
+        self.author_table.setHorizontalHeaderLabels(["Name", "Affiliation"])
+        self.author_table.verticalHeader().setVisible(False)
+        self.author_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        self.author_table.setMaximumHeight(150)
+        self.add_author_row()
+
+        add_author = QPushButton("+")
+        remove_author = QPushButton("\u2212")
+        for button in (add_author, remove_author):
+            button.setMaximumWidth(36)
+        add_author.clicked.connect(self.add_author_row)
+        remove_author.clicked.connect(self.remove_author_row)
+
+        author_buttons = QHBoxLayout()
+        author_buttons.addStretch()
+        author_buttons.addWidget(add_author)
+        author_buttons.addWidget(remove_author)
+
+        self.abstract_edit = QPlainTextEdit()
+        self.abstract_edit.setPlaceholderText("optional")
+        self.abstract_edit.setMaximumHeight(130)
+
+        form = QFormLayout()
+        # without this the fields size to their content and the title
+        # clips rather than filling the panel
+        form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
+        )
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        form.addRow("Title", self.title_edit)
+        form.addRow("Authors", self.author_table)
+        form.addRow("", author_buttons)
+        form.addRow("Abstract", self.abstract_edit)
+
+        # keeps the rows together at the top instead of spreading them
+        # down the full height of the window
+        metadata_layout = QVBoxLayout()
+        metadata_layout.addLayout(form)
+        metadata_layout.addStretch()
+
+        self.metadata_panel = QWidget()
+        self.metadata_panel.setLayout(metadata_layout)
+        self.metadata_panel.setMinimumWidth(320)
+        self.metadata_panel.setMaximumWidth(380)
 
         self.pdf_document = QPdfDocument(self)
         self.pdf_view = QPdfView(self)
@@ -142,6 +219,7 @@ class MainWindow(QWidget):
         right_panel.setMaximumWidth(420)
 
         middle = QHBoxLayout()
+        middle.addWidget(self.metadata_panel)
         middle.addWidget(self.pdf_view, stretch=1)
         middle.addWidget(right_panel)
 
@@ -152,6 +230,53 @@ class MainWindow(QWidget):
         self.open_button.clicked.connect(self.choose_file)
         self.build_button.clicked.connect(self.start_build)
         self.fix_button.clicked.connect(self.repair)
+
+    # --------------------------------------------------------------- metadata
+
+    def add_author_row(self) -> None:
+        row = self.author_table.rowCount()
+        self.author_table.insertRow(row)
+        for column in (0, 1):
+            self.author_table.setItem(row, column, QTableWidgetItem(""))
+
+    def remove_author_row(self) -> None:
+        """Remove the selected row, or the last one.
+
+        Always leaves one row behind. With none there is no way to type an
+        author back in.
+        """
+        if self.author_table.rowCount() <= 1:
+            return
+        row = self.author_table.currentRow()
+        self.author_table.removeRow(row if row >= 0 else self.author_table.rowCount() - 1)
+
+    def set_authors(self, pairs) -> None:
+        """Fill the table. Used by tests and when loading a document."""
+        self.author_table.setRowCount(0)
+        for name, affiliation in pairs:
+            row = self.author_table.rowCount()
+            self.author_table.insertRow(row)
+            self.author_table.setItem(row, 0, QTableWidgetItem(name))
+            self.author_table.setItem(row, 1, QTableWidgetItem(affiliation))
+        if self.author_table.rowCount() == 0:
+            self.add_author_row()
+
+    def collect_authors(self) -> list:
+        """Read the table, skipping rows with no name.
+
+        A blank row would render as an empty IEEEauthorblock, which shows
+        up on the page as a gap under the title.
+        """
+        authors = []
+        for row in range(self.author_table.rowCount()):
+            name_item = self.author_table.item(row, 0)
+            affiliation_item = self.author_table.item(row, 1)
+            name = (name_item.text() if name_item else "").strip()
+            if not name:
+                continue
+            affiliation = (affiliation_item.text() if affiliation_item else "").strip()
+            authors.append(Author(name, affiliation))
+        return authors
 
     # ---------------------------------------------------------------- actions
 
@@ -176,6 +301,9 @@ class MainWindow(QWidget):
         self.worker = BuildWorker(
             self.source, self.source.parent / "build",
             self.template_box.currentData(), Rules(),
+            title=self.title_edit.text().strip(),
+            authors=self.collect_authors(),
+            abstract=self.abstract_edit.toPlainText().strip(),
         )
         self.worker.done.connect(self.on_done)
         self.worker.failed.connect(self.on_failed)
