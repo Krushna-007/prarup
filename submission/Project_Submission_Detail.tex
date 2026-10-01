@@ -1,0 +1,131 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{newtxtext,newtxmath}
+\usepackage[a4paper,top=18mm,bottom=16mm,left=22mm,right=22mm]{geometry}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{array}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{ink}{HTML}{15202B}
+\definecolor{accent}{HTML}{1F4E79}
+\definecolor{muted}{HTML}{5A6672}
+\definecolor{rule}{HTML}{C8D2DC}
+
+\color{ink}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+
+%% section headings: small caps, accent colour, hairline beneath
+\titleformat{\section}
+  {\normalfont\large\bfseries\color{accent}}
+  {\thesection.}{0.5em}{}
+  [\vspace{2pt}{\color{rule}\titlerule[0.6pt]}]
+\titlespacing*{\section}{0pt}{11pt}{6pt}
+
+\newcommand{\lead}[1]{\textbf{#1}\;\textemdash\;}
+
+\pagestyle{empty}   %% a one-page document needs no folio
+
+\begin{document}
+\sloppy
+
+%% ----------------------------------------------------------- masthead
+{\color{muted}\footnotesize\scshape Project Submission Details\par}
+\vspace{3pt}
+{\color{rule}\hrule height 1.6pt}
+\vspace{9pt}
+
+{\LARGE\bfseries Prarup\par}
+\vspace{3pt}
+{\large\color{accent} A Pre-Flight Compliance Workbench for Research Paper Submissions\par}
+\vspace{10pt}
+
+{\color{rule}\hrule height 0.5pt}
+\vspace{7pt}
+
+{\footnotesize\color{muted}\textsc{Group Details}\par}
+\vspace{3pt}
+{\small
+\begin{tabular}{@{}p{0.30\textwidth} p{0.30\textwidth} p{0.30\textwidth}@{}}
+Prateek Kalal & Om Patel & Krushna Parmar \\[1pt]
+{\color{muted}202611009} & {\color{muted}202611030} & {\color{muted}202611032} \\
+\end{tabular}\par}
+\vspace{4pt}
+{\color{rule}\hrule height 0.5pt}
+
+%% ----------------------------------------------------------- body
+\section{Description}
+
+Every paper submitted to a conference must first clear an automated gate, and a
+dispiriting number never do. The culprit is rarely the argument and almost never
+the prose; it is the typography. A font referenced but never embedded. A figure
+exported in a bitmap format that archival systems refuse outright. A page limit
+breached by four lines nobody counted. None of these is visible in the document
+the author is looking at, none appears in the compilation log, and the author
+discovers them on the evening of the deadline, from a validator that returns a
+verdict and no explanation.
+
+\medskip
+\textsc{Prarup} \textemdash\ the Hindi word for \emph{format} \textemdash\ closes
+that gap. It is an offline desktop application, written entirely in Python, that
+accepts a manuscript as \texttt{.docx} or \LaTeX{}, renders it into the target
+conference template, compiles it with a live preview, and then interrogates the
+resulting PDF against the rules that actually govern acceptance. A deterministic
+engine performs every check; a language model, when enabled, explains findings in
+plain English but is never permitted to touch the manuscript. Where a defect can
+be repaired mechanically, Prarup repairs it and verifies its own work. Where it
+cannot, it says so plainly rather than claiming a success it has not achieved.
+The draft never leaves the author's machine.
+
+\section{Objectives}
+
+\begin{itemize}[leftmargin=1.1em,itemsep=3.5pt,topsep=3pt,parsep=0pt]
+  \item \lead{Faithful Ingestion} To normalise manuscripts arriving as \texttt{.docx}
+        or \LaTeX{} into a single internal representation, preserving figures,
+        tables and mathematics that conversion tools routinely discard in silence.
+
+  \item \lead{Template Fidelity} To render that representation into a conference
+        template, with the governing rules held as editable data rather than code,
+        so that a new venue is a configuration change and not a rewrite.
+
+  \item \lead{Deterministic Verification} To inspect the compiled PDF for the defects
+        that decide acceptance \textemdash\ font embedding, bitmap typefaces, archival
+        conformance, page geometry and document permissions \textemdash\ by measurement
+        rather than by inference, and never by a model's judgement.
+
+  \item \lead{Honest Remediation} To repair what is unambiguously repairable, to
+        re-verify every repair before reporting it, and to distinguish clearly
+        between a defect that software can fix and one that obliges the author to
+        regenerate a figure.
+
+  \item \lead{Sovereignty of the Draft} To perform the entire process locally, so that
+        unpublished work is never surrendered to a third-party service as the price
+        of being checked.
+\end{itemize}
+
+\section{Outcomes}
+
+\begin{itemize}[leftmargin=1.1em,itemsep=3.5pt,topsep=3pt,parsep=0pt]
+  \item \lead{A Working Desktop Application} A graphical workbench in which a manuscript
+        is opened, composed, compiled and verified in one place, with the formatted
+        document and its compliance report visible side by side.
+
+  \item \lead{Verification Before Submission, Rather Than After} The judgement that
+        publishers presently deliver as a terminal verdict, moved to the point at
+        which the author can still act upon it, and accompanied by the reason.
+
+  \item \lead{An Extensible Rule Catalogue} A verification engine in which each rule is
+        an independent, individually tested unit, so that supporting a further
+        conference costs one rule file and no architectural disturbance.
+
+  \item \lead{Reproducible Evidence} A submission archive containing the source, its
+        assets, and a compliance report attesting that the document satisfies the
+        venue's requirements \textemdash\ evidence, not assurance.
+\end{itemize}
+
+\end{document}
