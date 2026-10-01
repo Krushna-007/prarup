@@ -121,7 +121,11 @@ poetry run prarup check paper.pdf --fix     # repair, then re-verify
 poetry run prarup-gui                       # the desktop window
 ```
 
-![The window, with a defect found](docs/images/window-with-issue.png)
+![The window](docs/images/window-clean.png)
+
+Title, authors and abstract are typed in the window, since a `.docx` carries
+none of them. The same values are `--title`, `--author` and `--abstract` on the
+command line.
 
 A `.docx` is converted to a body fragment, wrapped in the IEEE conference
 template, and compiled. A `.tex` is compiled as it stands, because there is no
@@ -149,13 +153,12 @@ Ghostscript repair, and a PySide6 window over all of it.
 
 **Python 3.11 to 3.13.** PySide6 publishes no wheels for 3.14 yet.
 
-77 tests pass, GUI included, headless. Two carry most of the weight: one builds a real paper containing a
+87 tests pass, GUI included, headless. Two carry most of the weight: one builds a real paper containing a
 default matplotlib figure and confirms the defect is found in the compiled
 output, the other takes the `.docx` fixture all the way to a compliant IEEE PDF
 and checks the abstract still precedes the body.
 
-Not built yet: the LLM advisory layer, and title/author/abstract fields in the
-window (the CLI takes them as flags). See [14 · How To Build It](docs/14-how-to-build.md).
+Not built yet: the LLM advisory layer. See [14 · How To Build It](docs/14-how-to-build.md).
 
 ---
 
