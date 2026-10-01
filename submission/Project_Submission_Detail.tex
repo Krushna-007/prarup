@@ -1,38 +1,60 @@
 \documentclass[11pt,a4paper]{article}
 
+%% --- typography -------------------------------------------------------
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage{charter}
-\usepackage[a4paper,top=16mm,bottom=14mm,left=22mm,right=22mm]{geometry}
+\usepackage{lmodern}          % Latin Modern: vector Computer Modern
+\usepackage{microtype}        % margin kerning and subtle expansion
+\usepackage{textcomp}
+
+%% --- layout -----------------------------------------------------------
+\usepackage[a4paper,top=19mm,bottom=16mm,left=23mm,right=23mm]{geometry}
+\usepackage{titlesec}
 \usepackage{enumitem}
-\usepackage{parskip}
+\usepackage{booktabs}
+\usepackage{array}
 
 \pagestyle{empty}
-\setlist[itemize]{leftmargin=1.4em, itemsep=3pt, topsep=3pt, parsep=0pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt plus 1pt minus 1pt}
+\linespread{1.04}
+
+%% numbered headings, bold, hanging number, no rules or colour
+\titleformat{\section}[hang]
+  {\normalfont\large\bfseries}{\thesection}{0.8em}{}
+\titlespacing*{\section}{0pt}{12pt plus 2pt minus 2pt}{5pt}
+
+\setlist[itemize]{label=\textbullet, leftmargin=1.5em,
+                  itemsep=4pt, topsep=4pt, parsep=0pt}
+
+\newcommand{\heading}[1]{\textbf{#1}}
 
 \begin{document}
 
+%% --- masthead ---------------------------------------------------------
 \begin{center}
-{\large\bfseries Project Submission Details}
+  {\large\scshape Project Submission Details}
 \end{center}
+\vspace{-2pt}
+\hrule height 0.4pt
+\vspace{10pt}
+
+\heading{Project Title:}\quad Prarup: A Submission Compliance Checker for
+Research Papers
 
 \vspace{6pt}
 
-\textbf{Project Title:} Prarup: A Submission Compliance Checker for Research Papers
+\heading{Group Details}
 
-\vspace{7pt}
+\vspace{2pt}
+{\setlength{\extrarowheight}{2pt}
+\begin{tabular}{@{}l l l@{}}
+Member 1 & Prateek Kalal   & [202611009] \\
+Member 2 & Om Patel        & [202611030] \\
+Member 3 & Krushna Parmar  & [202611032] \\
+\end{tabular}}
 
-\textbf{Group Details}
-
-Member 1: Prateek Kalal \,--\, [202611009]
-
-Member 2: Om Patel \,--\, [202611030]
-
-Member 3: Krushna Parmar \,--\, [202611032]
-
-\vspace{8pt}
-
-\textbf{1. Description}
+\section{Description}
 
 Conference papers are often rejected before anyone reads them, for formatting
 faults the author cannot see. The most common fault sits inside the figures.
@@ -43,59 +65,55 @@ and the author finds out on the day of the deadline, from a validator that
 replies only with a failure.
 
 Prarup is an offline desktop application, built in Python, that checks a paper
-before it is submitted. It takes a manuscript in Word or LaTeX format, fits it
-to the target conference template, compiles it, and then examines the resulting
-PDF for the faults that actually cause rejection. Every check is ordinary code
-with a fixed answer, not a judgement by a model. Faults that can be corrected
-safely are corrected, and the file is checked again afterwards to confirm the
-correction worked. Faults that cannot be corrected are reported as such, with
-the change the author needs to make. Nothing is uploaded anywhere; the paper
-stays on the author's computer.
+before it is submitted. It takes a manuscript in Word or \LaTeX{} format, fits
+it to the target conference template, compiles it, and then examines the
+resulting PDF for the faults that actually cause rejection. Every check is
+ordinary code with a fixed answer, not a judgement by a model. Faults that can
+be corrected safely are corrected, and the file is checked again afterwards to
+confirm the correction worked. Faults that cannot be corrected are reported as
+such, with the change the author needs to make. Nothing is uploaded anywhere;
+the paper stays on the author's computer.
 
-\vspace{2pt}
-
-\textbf{2. Objectives}
+\section{Objectives}
 
 \begin{itemize}
-  \item \textbf{Manuscript Conversion:} To read papers written in Word or LaTeX
-  and convert them into the required conference format, keeping figures, tables
-  and equations intact.
+  \item \heading{Manuscript Conversion.} To read papers written in Word or
+  \LaTeX{} and convert them into the required conference format, keeping
+  figures, tables and equations intact.
 
-  \item \textbf{Live Compilation:} To build the paper and show the finished PDF
-  as the author works, so formatting problems are visible immediately rather
-  than at the end.
+  \item \heading{Live Compilation.} To build the paper and show the finished
+  PDF as the author works, so formatting problems are visible immediately
+  rather than at the end.
 
-  \item \textbf{Compliance Checking:} To inspect the compiled PDF for embedded
+  \item \heading{Compliance Checking.} To inspect the compiled PDF for embedded
   fonts, bitmap fonts, archival format, page limits and document permissions,
   measuring each one directly from the file.
 
-  \item \textbf{Automatic Correction:} To repair the faults that have a safe
+  \item \heading{Automatic Correction.} To repair the faults that have a safe
   mechanical fix, verify the repair by running the checks a second time, and
-  clearly separate these from faults that need the author to redo a figure.
+  separate these clearly from faults that need the author to redo a figure.
 
-  \item \textbf{Offline Operation:} To run the whole process on the user's own
+  \item \heading{Offline Operation.} To run the whole process on the user's own
   machine, so unpublished work never has to be sent to an online service to be
   checked.
 \end{itemize}
 
-\vspace{2pt}
-
-\textbf{3. Outcomes}
+\section{Outcomes}
 
 \begin{itemize}
-  \item \textbf{Working Desktop Application:} A single program where the paper
+  \item \heading{Working Desktop Application.} A single program where the paper
   is opened, formatted, compiled and checked, with the document and the list of
   problems shown side by side.
 
-  \item \textbf{Problems Found Before Submission:} The verdict the publisher's
-  validator gives at the end, moved to a point where the author can still act on
-  it, with the reason attached.
+  \item \heading{Problems Found Before Submission.} The verdict the publisher's
+  validator gives at the end, moved to a point where the author can still act
+  on it, with the reason attached.
 
-  \item \textbf{Reusable Rule Set:} Conference requirements kept in editable
+  \item \heading{Reusable Rule Set.} Conference requirements kept in editable
   rule files, so supporting another conference means adding a file rather than
   changing the program.
 
-  \item \textbf{Submission Package:} An archive holding the source, the figures
+  \item \heading{Submission Package.} An archive holding the source, the figures
   and a short report stating which checks the paper passed, ready to upload.
 \end{itemize}
 
