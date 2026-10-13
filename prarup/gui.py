@@ -38,6 +38,14 @@ from prarup.fix import embed_fonts
 from prarup.models import Author, Rules
 from prarup.render import render
 
+PRESETS = Path(__file__).parent / "presets"
+
+
+def rules_for(template: str) -> Rules:
+    """The rules that go with a template, from the same YAML the CLI reads."""
+    preset = PRESETS / f"{template}.yaml"
+    return Rules.load(preset) if preset.exists() else Rules()
+
 
 def format_issue(issue) -> str:
     """One line of text for the compliance list."""
@@ -292,6 +300,9 @@ class MainWindow(QWidget):
         self.build_button.setEnabled(True)
         self.status.setText(f"Ready: {path.name}")
 
+    def current_rules(self) -> Rules:
+        return rules_for(self.template_box.currentData())
+
     def start_build(self) -> None:
         if self.source is None:
             return
@@ -300,7 +311,7 @@ class MainWindow(QWidget):
 
         self.worker = BuildWorker(
             self.source, self.source.parent / "build",
-            self.template_box.currentData(), Rules(),
+            self.template_box.currentData(), self.current_rules(),
             title=self.title_edit.text().strip(),
             authors=self.collect_authors(),
             abstract=self.abstract_edit.toPlainText().strip(),
@@ -319,7 +330,7 @@ class MainWindow(QWidget):
             self.status.setText(f"Repair failed: {exc}")
             return
         # never trust the repair; re-check before saying anything
-        self.on_done(fixed, run_all_checks(fixed, Rules()))
+        self.on_done(fixed, run_all_checks(fixed, self.current_rules()))
 
     # ---------------------------------------------------------------- results
 
