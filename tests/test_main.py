@@ -91,3 +91,25 @@ def test_fix_does_not_claim_success_on_type3(monkeypatch, capsys, tmp_path):
 
     assert "FONT-02" in capsys.readouterr().out
     assert code == 1
+
+
+def test_a_corrupt_pdf_exits_two_without_a_traceback(monkeypatch, capsys, tmp_path):
+    bad = tmp_path / "bad.pdf"
+    bad.write_text("garbage")
+    assert run(monkeypatch, "check", str(bad)) == 2
+    assert "not a readable PDF" in capsys.readouterr().err
+
+
+def test_build_refuses_an_unsupported_file_type(monkeypatch, capsys, tmp_path):
+    """A .txt would otherwise reach Tectonic and fail with a TeX error."""
+    notes = tmp_path / "notes.txt"
+    notes.write_text("hello")
+    assert run(monkeypatch, "build", str(notes), "--outdir", str(tmp_path)) == 2
+    assert ".docx, .tex or .pdf" in capsys.readouterr().err
+
+
+def test_build_reports_a_missing_source(monkeypatch, capsys, tmp_path):
+    code = run(monkeypatch, "build", str(tmp_path / "gone.tex"),
+               "--outdir", str(tmp_path))
+    assert code == 2
+    assert "does not exist" in capsys.readouterr().err

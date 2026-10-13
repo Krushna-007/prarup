@@ -9,7 +9,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from prarup.checks import run_all_checks
+from prarup.checks import UnreadablePdf, run_all_checks
 from prarup.compile import TectonicNotFound, compile_pdf
 from prarup.convert import (
     ConversionFailed,
@@ -23,6 +23,7 @@ from prarup.models import Author, Rules
 from prarup.render import render
 
 PRESETS = Path(__file__).parent / "presets"
+SOURCE_TYPES = {".docx", ".tex", ".pdf"}
 
 
 def load_rules(args) -> Rules:
@@ -133,7 +134,18 @@ def main() -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    if args.command == "check":
+    if not args.source.exists():
+        print(f"error: {args.source} does not exist", file=sys.stderr)
+        return 2
+
+    suffix = args.source.suffix.lower()
+    if suffix not in SOURCE_TYPES:
+        print(f"error: {args.source.name} is not a .docx, .tex or .pdf file",
+              file=sys.stderr)
+        return 2
+
+    # building a PDF has nothing to build, so it is the same as checking it
+    if args.command == "check" or suffix == ".pdf":
         pdf_path = args.source
     else:
         try:
@@ -151,7 +163,11 @@ def main() -> int:
         print(f"error: {pdf_path} does not exist", file=sys.stderr)
         return 2
 
-    issues = run_all_checks(pdf_path, rules)
+    try:
+        issues = run_all_checks(pdf_path, rules)
+    except UnreadablePdf as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
     if args.fix and any(i.can_fix for i in issues):
         fixed_path = pdf_path.with_name(pdf_path.stem + "-fixed.pdf")
