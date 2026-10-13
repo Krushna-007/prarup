@@ -24,11 +24,16 @@ def compile_pdf(tex_path: Path, out_dir: Path) -> tuple[Path, str]:
         )
 
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Remove the last build first. Tectonic writes nothing on failure, so
+    # a leftover PDF would be checked as if this compile had produced it.
+    pdf_path = out_dir / (tex_path.stem + ".pdf")
+    pdf_path.unlink(missing_ok=True)
+
     result = subprocess.run(
         ["tectonic", "--synctex", "--outdir", str(out_dir), str(tex_path)],
         capture_output=True,
         text=True,
     )
 
-    pdf_path = out_dir / (tex_path.stem + ".pdf")
     return pdf_path, result.stderr
