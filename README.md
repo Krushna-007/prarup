@@ -65,7 +65,7 @@ will report successes it did not achieve. See
 | [02 · System Architecture](docs/02-architecture.md) | Full pipeline, component diagrams, data flow |
 | [03 · Features](docs/03-features.md) | Table stakes vs. our differentiators |
 | [04 · UI Design](docs/04-ui-design.md) | Screen layouts, click paths, mockup specs |
-| [05 · Python Design](docs/05-python-design.md) | Class hierarchy, ABCs, design decisions |
+| [05 · Python Design](docs/05-python-design.md) | The classes and functions that exist, and why |
 | [06 · Tech Stack](docs/06-tech-stack.md) | Every library, and why it was chosen |
 | [07 · Scope & Timeline](docs/07-scope-and-timeline.md) | What we commit to in four weeks |
 | [08 · Presentation Outline](docs/08-presentation-outline.md) | Slide-by-slide deck content |
@@ -75,9 +75,9 @@ will report successes it did not achieve. See
 
 | Document | What's inside |
 |---|---|
-| [10 · Toolchain](docs/10-toolchain.md) | Every dependency, install commands, Tectonic and Jinja2 configuration traps |
+| [10 · Toolchain](docs/10-toolchain.md) | Every dependency, install commands, how Tectonic and Jinja2 are configured |
 | [11 · Compliance Rules](docs/11-compliance-rules.md) | The rule catalogue — detection code, severity, and remedy for each check |
-| [12 · Implementation Notes](docs/12-implementation-notes.md) | QProcess compilation, SyncTeX, log parsing, font inspection |
+| [12 · Implementation Notes](docs/12-implementation-notes.md) | The build pipeline, the worker thread, font inspection, docx conversion details |
 | [13 · Pitfalls](docs/13-pitfalls.md) | Silent failures, environment traps, demo rehearsal checklist |
 | [14 · How To Build It](docs/14-how-to-build.md) | Minimal design, walking skeleton, the first ten tests, design rules |
 
@@ -98,7 +98,7 @@ will report successes it did not achieve. See
 ```bash
 poetry install
 poetry run python tools/make_fixtures.py     # generate test PDFs
-poetry run pytest                             # 46 tests
+poetry run pytest                             # 105 tests
 ```
 
 External tools: `tectonic` to compile, `pandoc` for `.docx`, `ghostscript` to
@@ -131,31 +131,46 @@ A `.docx` is converted to a body fragment, wrapped in the IEEE conference
 template, and compiled. A `.tex` is compiled as it stands, because there is no
 reliable way to separate an author's preamble from their body.
 
-```
-paper.pdf: 1 error(s), 0 warning(s)
+Real output on a published 13-page IEEE IoT Journal article (trimmed):
 
-  ERROR  FONT-02  EKKAYT+DejaVuSans is a Type3 bitmap font
+```
+paper.pdf: 6 error(s), 1 warning(s)
+
+  ERROR  FONT-01  Helvetica is not embedded (pages 1-13)   [can fix automatically]
+  ERROR  FONT-02  STIXGeneral-Italic is a Type3 bitmap font (pages 9-12). Re-export the figure with matplotlib rcParams['pdf.fonttype'] = 42
+  ...
+  WARN   GEOM-01  7 pages over the 6-page limit
 ```
 
 Exit codes: `0` nothing blocking, `1` would be rejected, `2` the tool could not
 run. Usable as a gate in a submission script.
 
 `--fix` writes a repaired copy and re-runs every check on it. It never reports a
-repair it has not verified, and it never modifies the original.
+repair it has not verified, never modifies the original, and leaves images at
+their original resolution and compression.
 
 ---
 
 ## Status
 
-**v0.7.** Working: `.docx` and `.tex` input, IEEE template rendering, Tectonic
-compilation, font, page-limit and encryption checks, YAML rule presets,
-Ghostscript repair, and a PySide6 window over all of it.
+**v0.8.** Working: `.docx` and `.tex` input, IEEE template rendering, Tectonic
+compilation, five compliance checks (unembedded fonts, Type3 fonts, page limit,
+encryption, bookmarks), YAML rule presets, Ghostscript repair that is re-checked
+and leaves figures untouched, and a PySide6 window over all of it.
+
+**Tested on a real paper.** A 13-page IEEE IoT Journal article: Prarup found the
+default-matplotlib Type3 fonts in its figures on pages 9 to 12, reported each
+font once with its pages, and repaired the unembedded Helvetica without changing
+a pixel of any figure.
 
 **Python 3.11 to 3.13.** PySide6 publishes no wheels for 3.14 yet.
 
-87 tests pass, GUI included, headless. Two carry most of the weight: one builds a real paper containing a
+105 tests pass, GUI included, headless. Two carry most of the weight: one builds a real paper containing a
 default matplotlib figure and confirms the defect is found in the compiled
 output, the other takes the `.docx` fixture all the way to a compliant IEEE PDF
 and checks the abstract still precedes the body.
 
-Not built yet: the LLM advisory layer. See [14 · How To Build It](docs/14-how-to-build.md).
+Not built yet: submission bundle export, auto-compile while typing, the figure
+and caption manager, PDF/A, margin and caption checks, and the LLM advisory
+layer. See [07 · Scope](docs/07-scope-and-timeline.md) and
+[11 · Compliance Rules](docs/11-compliance-rules.md).
