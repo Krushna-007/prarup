@@ -162,3 +162,36 @@ def test_a_tex_file_is_not_mistaken_for_a_pdf(tmp_path):
     tex.write_text(r"\documentclass{article}")
     with pytest.raises(UnreadablePdf):
         run_all_checks(tex, Rules())
+
+
+def _with_bookmarks(path):
+    import pymupdf
+
+    doc = pymupdf.open()
+    doc.new_page()
+    doc.new_page()
+    doc.set_toc([[1, "Introduction", 1], [1, "Results", 2]])
+    doc.save(path)
+    doc.close()
+    return path
+
+
+def test_bookmarks_are_reported(tmp_path):
+    """hyperref adds bookmarks, which some IEEE pipelines reject."""
+    from prarup.checks import check_bookmarks
+
+    issues = check_bookmarks(_with_bookmarks(tmp_path / "marked.pdf"))
+    assert [i.code for i in issues] == ["DOC-02"]
+    assert "2 bookmarks" in issues[0].message
+    assert issues[0].severity == "warning"
+
+
+def test_no_bookmarks_is_clean():
+    from prarup.checks import check_bookmarks
+
+    assert check_bookmarks(FIXTURES / "six_pages.pdf") == []
+
+
+def test_run_all_checks_includes_bookmarks(tmp_path):
+    issues = run_all_checks(_with_bookmarks(tmp_path / "marked.pdf"), Rules())
+    assert "DOC-02" in [i.code for i in issues]
