@@ -10,15 +10,16 @@ is worth building.
 
 Necessary. Not interesting. Nobody will award marks for these alone.
 
-| Feature | Notes |
-|---|---|
-| Import `.tex` / `.docx` | Both normalise into the same `Document` |
-| Select target template | IEEE Conference for v1 |
-| Structured editor | Edit section text without touching LaTeX syntax |
-| Live auto-compile | Debounced ~800 ms, background thread |
-| Embedded PDF preview | `QPdfView`, page navigation |
-| Figure & table manager | Reorder, resize, replace, edit captions, insert new |
-| Export | Compliant PDF + source bundle |
+| Feature | Notes | Status |
+|---|---|---|
+| Import `.tex` / `.docx` | `.docx` goes through pandoc into the IEEE template; `.tex` compiles as written | ✅ Built |
+| Select target template | IEEE Conference for v1 | ✅ Built |
+| Title, authors, abstract fields | A `.docx` carries none of these, so they are typed in the window | ✅ Built |
+| Structured editor | Edit section text without touching LaTeX syntax | Not built |
+| Live auto-compile | Debounced ~800 ms, background thread | Partly: background build on **Build** click |
+| Embedded PDF preview | `QPdfView`, fit to width, multi-page | ✅ Built |
+| Figure & table manager | Reorder, resize, replace, edit captions, insert new | Not built |
+| Export | Compliant PDF + source bundle | Partly: repaired PDF is written; bundle zip not built |
 
 ---
 
@@ -29,18 +30,25 @@ Necessary. Not interesting. Nobody will award marks for these alone.
 **The flagship.** IEEE PDF eXpress is a gate at the end of the process. We move
 that gate to the beginning, and we explain what it finds.
 
-| Check | Implementation |
-|---|---|
-| **Non-embedded fonts inside figures** | `page.get_fonts()` returns `"n/a"` for any font not embedded — we walk every included figure, not just the main document |
-| Type3 bitmap fonts | Font subtype inspection via PyMuPDF |
-| PDF/A-1b conformance | Metadata and output-intent inspection via pikepdf |
-| Security flags, bookmarks, crop marks | pikepdf document properties |
-| Page count | Actual rendered pages, against `rules.yaml` |
-| Margins & column width | Text bounding boxes measured against the page box |
-| Caption placement | Tables above, figures below — IEEE convention |
+| Check | Implementation | Status |
+|---|---|---|
+| **Non-embedded fonts inside figures** | `page.get_fonts()` returns `"n/a"` for any font not embedded; figure fonts appear on the page that draws them | ✅ FONT-01, auto-fix |
+| Type3 bitmap fonts | Font subtype via PyMuPDF; message gives the matplotlib fix | ✅ FONT-02 |
+| Security flags | `doc.metadata["encryption"]` via PyMuPDF | ✅ DOC-01, auto-fix |
+| Bookmarks | `doc.get_toc()` via PyMuPDF | ✅ DOC-02 |
+| Page count | Actual rendered pages, against `presets/ieee.yaml` | ✅ GEOM-01 |
+| PDF/A-1b conformance | veraPDF | Deferred |
+| Margins & column width | Text bounding boxes against the page box | Not built |
+| Caption placement | Tables above, figures below, IEEE convention | Not built |
 
-Every result carries a **severity**, a **plain explanation**, and where the fix is
-deterministic, a **one-click repair**.
+Every result carries a **severity**, a **plain explanation** with the pages
+involved, and where the fix is deterministic, a **one-click repair** that is
+re-checked before it is reported.
+
+Differentiators 2, 4 and 5 below are **designed, not built**. Offline (3) is true
+today in the sense that matters: Prarup makes no network calls of its own. The
+visible toggle is not built, and Tectonic's first compile on a new machine
+downloads packages.
 
 #### Why the figure-font check is the headline
 
@@ -120,10 +128,10 @@ paper_submission.zip
 
 | | Overleaf | SciSpace | PDF eXpress | **Prarup** |
 |---|:-:|:-:|:-:|:-:|
-| Template conversion | ✗ | ✓ | ✗ | ✓ |
+| Template conversion | ✗ | ✓ | ✗ | ✓ (.docx → IEEE) |
 | Live compile | ✓ | ✓ | ✗ | ✓ |
 | Figure-font audit | ✗ | ✗ | partial | **✓** |
-| Page-budget advice | ✗ | ✗ | ✗ | **✓** |
+| Page-budget advice | ✗ | ✗ | ✗ | planned |
 | Works offline | ✗ | ✗ | ✗ | **✓** |
 | Template breadth | n/a | **40,000+** | n/a | 1 (v1) |
 

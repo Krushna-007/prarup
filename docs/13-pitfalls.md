@@ -20,16 +20,29 @@ No fix is reported as successful on the strength of an exit code.
 
 ### Figures disappear during .docx conversion
 
-pandoc does not extract embedded media. The conversion succeeds, the LaTeX
-compiles, and the paper has no figures. See [12 · Implementation Notes](12-implementation-notes.md).
+pandoc writes `\includegraphics` for every image but only writes the image files
+with `--extract-media=.`. Without it the LaTeX compiles and the paper has no
+figures. See [12 · Implementation Notes](12-implementation-notes.md).
 
-**Rule: assert `len(doc.figures) > 0` when the source contained images**, and
-surface a warning when the counts disagree.
+**Rule: every `\includegraphics` path must resolve.** `tests/test_convert.py`
+checks it.
 
-### SyncTeX silently does nothing
+### A failed compile is checked against the last good PDF
 
-`synctex = true` is off by default in `Tectonic.toml`. Without it the feature
-does not error — clicks just do nothing, which reads as a UI bug for hours.
+Tectonic writes nothing when compilation fails. If the previous PDF is still in
+the build folder, the checks run on it and report "all checks passed". Fixed:
+`compile_pdf` deletes the old output first, and a test covers it.
+
+### The font repair quietly lowers figure quality
+
+Ghostscript's `/prepress` setting, the usual advice for embedding fonts, also
+downsamples images to 300 dpi and re-encodes lossless ones as JPEG. Fixed by
+overriding the image settings; see [11 · Compliance Rules](11-compliance-rules.md).
+
+### SyncTeX silently does nothing (for when click-to-jump is built)
+
+Tectonic writes no `.synctex.gz` unless asked. We pass `--synctex`; without it
+the feature would not error, clicks would just do nothing.
 
 ### A PDF/A claim is not PDF/A conformance
 
@@ -53,11 +66,10 @@ This also interacts awkwardly with our own offline claim: *the app* works
 offline, but *the first ever compile* needs the network. Say so plainly rather
 than being caught by the question.
 
-### Pin the Tectonic bundle
+### The Tectonic bundle can move
 
-An unpinned `bundle` URL means the package set can move under you. A document
-that built last week may stop building. Pin it in `Tectonic.toml` and treat a
-bundle change as a deliberate commit.
+Tectonic fetches packages from its default bundle, which can change between
+releases. Keep the same Tectonic version on all three machines.
 
 ### Fonts differ across the three machines
 
@@ -76,8 +88,9 @@ Stated in [02 · Architecture](02-architecture.md) and repeated here because it 
 the easiest rule to erode under deadline pressure. The first "just let it fix the
 wording" commit is the one that ends the guarantee.
 
-`Check` has no reference to `LLMBackend`. Keep it that way — the type system is
-the enforcement mechanism.
+`checks.py` imports nothing that could call a model, and
+`tests/test_layering.py` fails if it ever imports `subprocess`, Qt or a network
+library. Keep it that way.
 
 ### Do not check the source when you mean the output
 
@@ -103,15 +116,15 @@ not testable.
 
 ### Test the rules, not the UI
 
-`verify/` is pure functions over fixture PDFs — trivially testable and the part
-that actually matters. UI tests cost more than they return on a four-week
-project.
+`checks.py` is pure functions over fixture PDFs, trivially testable and the part
+that actually matters. The window does have tests (pytest-qt, headless), but
+they check wiring, not appearance.
 
 ### Keep a known-good fixture in version control
 
-`tests/fixtures/clean.pdf` must always pass every check. When something breaks,
-it tells you instantly whether the regression is in the checker or in the
-document.
+`tests/fixtures/six_pages.pdf` and `mpl_truetype.pdf` must always pass every
+check. When something breaks, they tell you instantly whether the regression is
+in the checker or in the document.
 
 ---
 
@@ -120,9 +133,8 @@ document.
 | Trap | Prevention |
 |---|---|
 | Tectonic downloads a bundle mid-demo | Warm the cache the day before |
-| Ollama model not pulled | `ollama pull qwen2.5:7b` in advance |
-| NIM rate limit (~40 req/min) hit | Disable the AI panel for the demo; rules still run |
-| The "broken" figure isn't actually broken | Verify `mpl_type3.pdf` fails the check *before* presenting |
+| The "broken" figure isn't actually broken | Run `prarup check tests/fixtures/unembedded.pdf` *before* presenting |
+| A Type3 figure is shown with Fix | Fix cannot repair Type3. Use `unembedded.pdf` for the red-to-green flip |
 | Live compile takes longer than expected | Pre-compile once so the Tectonic cache is hot |
 
 The last one deserves emphasis. The red-to-green compliance flip is the moment

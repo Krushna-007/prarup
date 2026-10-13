@@ -35,8 +35,10 @@ Flat. One file per job. You should be able to guess what is in each one.
 
 ```
 prarup/
-├── models.py      # Issue, Document, Rules   (dataclasses, no logic)
-├── checks.py      # check_fonts, check_geometry, check_security   (pure)
+├── models.py      # Issue, Rules, Author, Document   (dataclasses, no logic)
+├── checks.py      # check_fonts, check_page_count, check_security, check_bookmarks   (pure)
+├── document.py    # pandoc fragment -> Document   (pure)
+├── render.py      # Document -> IEEE LaTeX with Jinja2   (pure)
 ├── compile.py     # runs Tectonic
 ├── convert.py     # .docx -> .tex using pandoc
 ├── fix.py         # runs Ghostscript to embed fonts
@@ -143,6 +145,11 @@ def check_page_count(pdf_path, rules):
 ```
 
 Plain functions. They take a path, they return a list. Nothing surprising.
+
+> **This is the planning sketch, kept as written.** Building it found a bug in
+> it: a Type3 font also reports `ext == "n/a"`, so this version reports every
+> Type3 font twice. The real `check_fonts` in `prarup/checks.py` tests Type3
+> first, and reports each font once with its page numbers.
 
 ### Running every check
 
@@ -358,15 +365,20 @@ fresh clone.
 
 Each stage runs on its own and can be demonstrated.
 
-| Stage | What works | Roughly |
-|---|---|---|
-| **v0.1** | `python main.py paper.tex` prints font problems | days 1 to 4 |
-| **v0.2** | page count, security flags, `rules.yaml` | days 5 to 7 |
-| **v0.3** | `.docx` input via pandoc | week 2 |
-| **v0.4** | Qt window: open file, see PDF, see problems | week 2 to 3 |
-| **v0.5** | Fix button (Ghostscript) | week 3 |
-| **v0.6** | Export submission zip | week 4 |
-| **v0.7** | LLM explanations, if time allows | week 4 |
+| Stage | What works | Roughly | Status |
+|---|---|---|---|
+| **v0.1** | `python main.py paper.tex` prints font problems | days 1 to 4 | ✅ |
+| **v0.2** | page count, security flags, `rules.yaml` | days 5 to 7 | ✅ |
+| **v0.3** | `.docx` input via pandoc | week 2 | ✅ |
+| **v0.4** | Qt window: open file, see PDF, see problems | week 2 to 3 | ✅ |
+| **v0.5** | Fix button (Ghostscript) | week 3 | ✅ |
+| **v0.6** | Export submission zip | week 4 | not built |
+| **v0.7** | LLM explanations, if time allows | week 4 | not built |
+
+The real order differed: the IEEE template renderer and the title/author/abstract
+fields were added between v0.5 and the window, and the robustness pass
+(stale-PDF guard, grouped report, image-safe repair, bookmarks check) came after.
+The README's version numbers follow the commits, not this table.
 
 **Build the command line version first.** It keeps the checking code free of Qt,
 and it means you have something working in four days instead of three weeks. The

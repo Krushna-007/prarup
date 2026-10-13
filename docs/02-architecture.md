@@ -61,7 +61,7 @@ flowchart LR
 ```
 
 The dashed box is the point of the diagram. The AI sits **beside** the pipeline,
-never inside it.
+never inside it. It is not built yet, and every check already runs without it.
 
 ---
 
@@ -74,8 +74,8 @@ downstream needs to know where the manuscript came from.
 
 | Input | Path | Fidelity |
 |---|---|---|
-| `.tex` | Native parser | Near-lossless — we control the grammar we accept |
-| `.docx` | `pypandoc` → LaTeX → model | Good. Images need manual extraction; custom macros break |
+| `.tex` | Compiled as written | Lossless. The author's own preamble is kept, since it cannot be reliably separated from the body |
+| `.docx` | pandoc → LaTeX fragment → IEEE template | Good. Images extracted with `--extract-media=.`; custom macros are detected and warned about |
 
 PDF input is deliberately **out of scope for v1**. See
 [07 · Scope](07-scope-and-timeline.md) for the reasoning.
@@ -103,14 +103,14 @@ preset from a call-for-papers.
 
 ### 3 · Compile
 
-**Tectonic**, invoked through `QProcess` so the UI never blocks.
+**Tectonic**, run inside a `QThread` worker so the window never blocks.
 
 - Self-contained: downloads only the packages the document actually uses
 - Runs the correct number of passes automatically — no `latexmk` guesswork
 - Users do **not** need a 5 GB TeX Live installation
 
-Auto-compile is debounced at roughly 800 ms of keyboard idle, the same feel as
-Overleaf's auto-build.
+*Planned, not built:* auto-compile debounced at roughly 800 ms of keyboard idle.
+Today the user clicks **Build**.
 
 ### 4 · Pre-flight check
 
@@ -132,13 +132,14 @@ flowchart TD
     style R fill:#ff6b35,color:#fff
 ```
 
-Each check is an independent class implementing a common interface. The report is
-literally a list comprehension over the registered checks — adding a new rule
-means adding one class and one line.
+Each check is a plain function, `check_x(pdf_path) -> list[Issue]`, and
+`run_all_checks` calls them in turn. Adding a new rule means one function and one
+line. Built today: fonts, page count, security and bookmarks. PDF/A, margins and
+caption placement are not built; see [11 · Compliance Rules](11-compliance-rules.md).
 
 ---
 
-## Data flow — one full loop
+## Data flow, one full loop (as built; bundle export is not built yet)
 
 ```mermaid
 sequenceDiagram
@@ -157,35 +158,38 @@ sequenceDiagram
     T-->>UI: paper.pdf
     UI->>V: check(pdf, rules)
     V-->>UI: 1 error, 2 warnings
-    U->>UI: Click "Fix" on font issue
-    UI->>E: embed_fonts(figure3.pdf)
-    E->>T: recompile
-    T-->>UI: paper.pdf
-    UI->>V: check()
+    U->>UI: Click "Fix what can be fixed"
+    UI->>E: embed_fonts(paper.pdf)
+    E-->>UI: paper-fixed.pdf
+    UI->>V: check(paper-fixed.pdf)
     V-->>UI: all clear
-    U->>UI: Export bundle
 ```
 
 ---
 
-## Module layout
+## Module layout, as built
+
+Flat, one file per job, as [14 · How To Build It](14-how-to-build.md) argues:
 
 ```
 prarup/
-├── ingest/       tex_reader.py   docx_reader.py
-├── model/        document.py          # dataclasses
-├── presets/      ieee/rules.yaml      loader.py   generator.py
-├── render/       latex_writer.py      asset_manager.py
-├── compile/      tectonic.py          log_parser.py   synctex.py
-├── verify/       fonts.py  geometry.py  pdfa.py  security.py  report.py
-├── llm/          base.py  ollama.py  nim.py  null.py
-├── ui/           main_window.py  editor_pane.py  pdf_pane.py
-│                 figure_manager.py    report_pane.py
-└── tests/                              # verify/ is heavily tested
+├── models.py      Issue, Rules, Author, Document   (dataclasses)
+├── checks.py      the compliance checks             (pure, no subprocess)
+├── document.py    pandoc fragment → Document        (pure)
+├── render.py      Document → IEEE LaTeX via Jinja2  (pure)
+├── convert.py     .docx → LaTeX                     (runs pandoc)
+├── compile.py     .tex → PDF                        (runs Tectonic)
+├── fix.py         embed fonts                       (runs Ghostscript)
+├── main.py        command line
+├── gui.py         the window
+├── presets/ieee.yaml
+└── templates/ieee.tex.j2
+tests/             105 tests, fixtures in tests/fixtures/
 ```
 
-The `model/` package is the spine. Every reader writes into it, every writer reads
-from it, and no other module talks across that boundary.
+The proposal's nested packages (`ingest/`, `verify/`, `llm/` …) were never needed
+at this size. `checks.py` is the spine: a test fails if it ever imports
+`subprocess`, Qt or a network library.
 
 ---
 
