@@ -17,6 +17,24 @@ class RepairFailed(Exception):
     """Raised when Ghostscript runs but produces nothing usable."""
 
 
+# Fonts are the only thing this repair is for. /prepress is what makes
+# Ghostscript embed Helvetica and the other base-14 fonts, but it also
+# downsamples images to 300 dpi and re-encodes lossless ones as JPEG,
+# which quietly lowers figure quality. These flags come after it and
+# override just the image settings.
+KEEP_IMAGES = [
+    "-dDownsampleColorImages=false",
+    "-dDownsampleGrayImages=false",
+    "-dDownsampleMonoImages=false",
+    "-dAutoFilterColorImages=false",
+    "-dAutoFilterGrayImages=false",
+    "-dColorImageFilter=/FlateEncode",
+    "-dGrayImageFilter=/FlateEncode",
+    "-dPassThroughJPEGImages=true",
+    "-dColorConversionStrategy=/LeaveColorUnchanged",
+]
+
+
 def embed_fonts(pdf_path: Path, out_path: Path) -> Path:
     """Rewrite a PDF with every referenced font embedded.
 
@@ -38,10 +56,11 @@ def embed_fonts(pdf_path: Path, out_path: Path) -> Path:
             "gs",
             "-dNOPAUSE", "-dBATCH", "-dSAFER", "-dQUIET",
             "-sDEVICE=pdfwrite",
-            "-dPDFSETTINGS=/prepress",
+            "-dPDFSETTINGS=/prepress",    # needed: the default never embeds the base-14 fonts
             "-dEmbedAllFonts=true",
             "-dSubsetFonts=true",
             "-dMaxSubsetPct=100",
+            *KEEP_IMAGES,
             f"-sOutputFile={out_path}",
             str(pdf_path),
         ],
