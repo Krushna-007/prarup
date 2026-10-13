@@ -47,7 +47,7 @@ hand has lost an evening to this.
 ```
 
 1. **Convert** — restructure the manuscript into the target template
-2. **Compile** — live preview, auto-rebuild as you edit, like Overleaf but local
+2. **Compile** — one click builds it and shows the PDF, locally, with Tectonic
 3. **Verify** — check the output against the conference's real submission rules
 
 **Say:** "Most tools stop at step two. Step three is the entire reason we are building this."
@@ -86,12 +86,13 @@ Next slide explains why."
 
 | Deterministic — always runs | LLM — optional, advisory |
 |---|---|
-| Font embedding audit | Explains a violation in plain English |
-| Page count, margins, columns | Suggests cuts when over the limit |
-| Type3 / PDF-A detection | Drafts a rule file from a new CFP |
-| Reference style validation | *Never edits without confirmation* |
+| Font embedding audit (built) | Explains a violation in plain English |
+| Type3 detection (built) | Suggests cuts when over the limit |
+| Page count, security, bookmarks (built) | Drafts a rule file from a new CFP |
+| | *Never edits without confirmation* |
 
-**Disable the AI entirely and every compliance check still works.**
+**Every check on the left is built and runs today with no AI at all.** The AI
+column is the planned next step.
 
 **Say:** "An LLM silently rewriting someone's unpublished paper is unacceptable.
 The rules are mechanical and reproducible. The model is a translator, not an author."
@@ -110,16 +111,20 @@ figure3.pdf           ← matplotlib export
 ```
 → IEEE PDF eXpress: **REJECTED.** No explanation.
 
-**Right — Prarup**
+**Right — Prarup, real output on a published IEEE IoT Journal paper**
 ```
-⛔  Fig. 3 — non-embedded font: Helvetica
-    Source: figure3.pdf (matplotlib)
-    Will be rejected by IEEE PDF eXpress
-    → [ Fix automatically ]   [ Show me ]
+ERROR  FONT-01  Helvetica is not embedded (pages 1-13)   [can fix]
+ERROR  FONT-02  STIXGeneral-Italic is a Type3 bitmap font (pages 9-12).
+                Re-export the figure with matplotlib rcParams['pdf.fonttype'] = 42
 ```
 
-Detected in **~30 lines of PyMuPDF** — `get_fonts()` returns `"n/a"` for any font
-that is not embedded. We walk every included figure, not just the main document.
+Detected in **~30 lines of PyMuPDF**: `get_fonts()` returns `"n/a"` for any font
+that is not embedded, and `"Type3"` for bitmap fonts. Fonts inside a figure are
+listed on the page that draws it, so checking the compiled PDF covers figures.
+
+The fix button embeds missing fonts with Ghostscript, **re-checks the result**,
+and leaves figures pixel-identical. Type3 cannot be repaired by any tool, so
+Prarup says so and gives the one-line change.
 
 **Say:** "Most common reason IEEE bounces a paper. Completely invisible to the author.
 No tool checks it before submission. And it is simple to detect — which is the point.
@@ -129,10 +134,11 @@ The value is not algorithmic difficulty. It is that nobody bothered."
 
 ## Slide 8 — Interface
 
-*Insert: main-window mockup + click-path diagram from [04 · UI Design](04-ui-design.md)*
+*Insert: `docs/images/window-clean.png` and `window-with-issue.png`*
 
-**Say:** Walk one full loop out loud — import, convert, see red, click fix, see green, export.
-Five clicks.
+**Say:** Walk one full loop out loud: open a .docx, type title and authors, Build,
+see red, click Fix, see green. Then show the target mockup from
+[04 · UI Design](04-ui-design.md) as where it is going.
 
 ---
 
@@ -140,16 +146,19 @@ Five clicks.
 
 *Insert: class diagram from [05 · Python Design](05-python-design.md)*
 
-Three abstract base classes, three plug-in points:
+- **Dataclasses** for the data: `Issue`, `Rules`, `Author`, `Document`
+- **Plain functions** for the checks: PDF in, list of issues out. Adding a rule
+  is one function and one line
+- **Real inheritance where Qt needs it:** `MainWindow(QWidget)`,
+  `BuildWorker(QThread)` with signals
+- **Custom exceptions** so every failure reaches the user as one sentence
+- **One rule enforced by a test:** `checks.py` may not import `subprocess`,
+  Qt or network code
+- **105 pytest tests**, the window included, run headless
 
-- **`Reader`** — adding PDF later is one new subclass, nothing else changes
-- **`Check`** — every rule is a class; the report is a list comprehension
-- **`LLMBackend`** — `NullBackend` is why the offline claim is structurally true
-
-Also: `@dataclass` for the model · `Enum` for severity · `QThread` for compile ·
-`pytest` over fixture PDFs · type hints throughout.
-
-**Say:** "`NullBackend` is not a placeholder. It is the default."
+**Say:** "We designed three abstract base classes first, then deleted them when
+the code showed they had one implementation each. No abstraction until you need
+it twice."
 
 ---
 
@@ -157,34 +166,38 @@ Also: `@dataclass` for the model · `Enum` for severity · `QThread` for compile
 
 | Layer | Tool |
 |---|---|
-| GUI | **PySide6** |
+| GUI | **PySide6** (`QPdfView`, `QThread`) |
 | Templating | **Jinja2** → LaTeX |
 | Compile | **Tectonic** |
-| PDF inspection | **PyMuPDF**, **pikepdf** |
-| DOCX import | **pypandoc** |
-| Local AI | **Ollama** (Mac M4) |
-| Cloud AI | **NVIDIA NIM** — free tier, no card |
+| PDF inspection | **PyMuPDF** |
+| DOCX import | **pandoc** |
+| Font repair | **Ghostscript** |
+| Packaging and tests | **Poetry**, **pytest**, **pytest-qt** |
 
 **Why Tectonic:** no 5 GB TeX Live install. It fetches only what the document uses
 and runs the right number of passes by itself.
 
 **Logos:** one row, ~64 px, from [simpleicons.org](https://simpleicons.org) —
-Python, Qt, LaTeX, NVIDIA, Ollama. Greyscale except Python and NVIDIA.
+Python, Qt, LaTeX, Poetry. Greyscale except Python.
 
 ---
 
 ## Slide 11 — Scope
 
-**In scope — 4 weeks**
-✓ `.tex` + `.docx` in ✓ IEEE out ✓ Live compile
-✓ Compliance checker ✓ Bundle export ✓ Works with AI off
+**Built**
+✓ `.tex` + `.docx` in ✓ IEEE out ✓ PDF preview ✓ 5 compliance checks
+✓ One-click repair, re-checked ✓ Command line for scripts ✓ No AI needed
+
+**Next**
+Submission bundle export · auto-compile while typing · figure and caption
+manager · LLM explanations (Ollama / NVIDIA NIM)
 
 **Future scope**
 PDF input (best open extractors reach ~83% on born-digital — deserves doing properly) ·
 ACM, LNCS, Elsevier presets · auto-generated presets from a CFP · conversion diff
 
-**Say:** "We would rather do one conference completely than four badly. The architecture
-already supports more — adding ACM is a preset file and a subclass."
+**Say:** "We would rather do one conference completely than four badly. Adding a
+conference is a YAML preset and a template file."
 
 ---
 
@@ -212,9 +225,9 @@ It is cloud-only and paid, and it does not verify the output. Our differentiator
 the compliance check, not the template library.
 
 **"Can't ChatGPT do the formatting?"**
-It can produce LaTeX. It cannot inspect a compiled PDF's font tables, measure
-rendered page geometry, or verify PDF/A conformance. Those are measurements, not
-generation — and they are the part that decides acceptance.
+It can produce LaTeX. It cannot open a compiled PDF and read its font tables.
+That is a measurement, not generation, and it is the part that decides
+acceptance.
 
 **"Why only one conference?"**
 Because four half-working templates is a worse project than one that works. The
@@ -222,7 +235,15 @@ preset system is already general; breadth is a week of work, not a redesign.
 
 **"What if the LLM gives wrong advice?"**
 It never decides compliance. Every verdict comes from deterministic code. The model
-only rephrases a verdict the rules already produced.
+would only rephrase a verdict the rules already produced, and it is not built yet.
+
+**"Does the fix damage my paper?"**
+No. It writes a separate `-fixed.pdf`, re-runs every check on it, and a test
+confirms figures render pixel-identical before and after.
+
+**"What about Type3 fonts?"**
+No tool can convert them after the fact, Ghostscript included; we test that.
+Prarup says so and gives the matplotlib setting to re-export the figure.
 
 ---
 

@@ -7,13 +7,16 @@ what would be impressive to promise.
 
 ## In scope — v1
 
-- ✅ `.tex` and `.docx` input
-- ✅ IEEE Conference output (IEEEtran)
-- ✅ Live auto-compile with embedded PDF preview
-- ✅ **Pre-flight compliance checker** — the flagship
-- ✅ Figure, table and caption management
-- ✅ Submission bundle export
-- ✅ Fully functional with AI disabled
+| Committed | Status (October 2026) |
+|---|---|
+| `.tex` and `.docx` input | ✅ Built |
+| IEEE Conference output (IEEEtran) | ✅ Built |
+| Live auto-compile with embedded PDF preview | Preview built; compile runs on **Build**, not on typing |
+| **Pre-flight compliance checker**, the flagship | ✅ Built: FONT-01, FONT-02, GEOM-01, DOC-01, DOC-02 |
+| One-click repair, re-checked | ✅ Built |
+| Figure, table and caption management | Not built |
+| Submission bundle export | Not built |
+| Fully functional with AI disabled | ✅ True: the AI layer is not built and nothing depends on it |
 
 ## Out of scope — v1
 
@@ -91,6 +94,11 @@ matplotlib figure, click one button to fix it, and export an archive that passes
 IEEE PDF eXpress.
 
 If that works end to end, v1 is complete.
+
+**Where it stands:** everything up to "click one button to fix it" works and is
+tested end to end. Two honest caveats: a matplotlib **Type3** font cannot be
+fixed by any tool (Prarup says so and gives the one-line matplotlib change), and
+the export archive is not built yet.
 
 ---
 

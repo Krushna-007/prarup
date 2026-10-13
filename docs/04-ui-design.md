@@ -4,6 +4,26 @@ Built with **PySide6**. Three panes, one status strip, no menus deeper than one 
 
 ---
 
+## As built today
+
+![The window](images/window-clean.png)
+
+| Area | What it does |
+|---|---|
+| Top bar | **Open…** (.docx, .tex or .pdf), **Template** (IEEE Conference), **Build**, and a status line such as `6 error(s), 1 warning(s)` |
+| Left | Title, an authors table (name and affiliation, rows added with **+** and removed with **−**), and the abstract |
+| Centre | The compiled PDF, fit to width, all pages |
+| Right | The compliance list (errors in red, fixable ones marked `[can fix]`) and **Fix what can be fixed** |
+
+The build runs in a background thread, so the window stays responsive. A failed
+build shows the error in the compliance list instead of failing silently.
+
+The design below is the full target. Not built yet: the outline and editor
+panes, auto-compile on typing, the offline toggle, the expanded compliance
+panel with per-issue buttons and green ticks for passed checks, and export.
+
+---
+
 ## Main window
 
 Target canvas **1280 × 800**. Rounded rectangles, hand-drawn style, one accent

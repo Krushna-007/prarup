@@ -1,168 +1,154 @@
 # 05 · Python Design
 
-PC503 is a Python subject, so the object model is not incidental — it is part of
-the deliverable. This document explains what we are building and, more
-importantly, *why the structure is shaped this way*.
+PC503 is a Python subject, so the object model is not incidental. It is part of
+the deliverable. This document describes the structure that was **actually
+built**, and why it is shaped this way.
+
+> **Changed from the proposal.** The first version of this document designed
+> three abstract base classes (`Reader`, `Check`, `LLMBackend`) before any code
+> existed. When we built it, none of them earned their place: there was one
+> reader per format, the checks were plain functions, and the LLM layer is not
+> built yet. [14 · How To Build It](14-how-to-build.md) explains the rule we
+> followed instead: *no abstraction until you have written the same thing twice.*
 
 ---
 
-## Class diagram
+## What exists
 
 ```mermaid
 classDiagram
+    class Issue {
+        <<dataclass>>
+        +str code
+        +str message
+        +str severity
+        +bool can_fix
+    }
+    class Rules {
+        <<dataclass>>
+        +int page_limit
+        +int columns
+        +float body_font_pt
+        +load(path) Rules
+    }
+    class Author {
+        <<dataclass>>
+        +str name
+        +str affiliation
+    }
     class Document {
+        <<dataclass>>
         +str title
         +list~Author~ authors
         +str abstract
-        +list~Section~ sections
-        +list~Figure~ figures
-        +list~Table~ tables
-        +list~Reference~ references
+        +str keywords
+        +str body
+        +str bibliography
+        +list figures
+    }
+    class QWidget
+    class QThread
+    class MainWindow {
+        +load(path)
+        +start_build()
+        +repair()
+        +current_rules() Rules
+        +show_issues(issues)
+    }
+    class BuildWorker {
+        +Signal done
+        +Signal failed
+        +run()
     }
 
-    class Reader {
-        <<abstract>>
-        +read(path) Document
-    }
-    class TexReader
-    class DocxReader
-
-    class Check {
-        <<abstract>>
-        +name: str
-        +severity: Severity
-        +run(pdf, rules) list~Issue~
-    }
-    class FontCheck
-    class GeometryCheck
-    class PdfaCheck
-    class SecurityCheck
-
-    class LLMBackend {
-        <<abstract>>
-        +explain(issue) str
-        +suggest_cuts(doc, overflow) list~str~
-    }
-    class OllamaBackend
-    class NIMBackend
-    class NullBackend
-
-    class Issue {
-        +str message
-        +Severity severity
-        +bool auto_fixable
-        +apply_fix()
-    }
-
-    Reader <|-- TexReader
-    Reader <|-- DocxReader
-    Check <|-- FontCheck
-    Check <|-- GeometryCheck
-    Check <|-- PdfaCheck
-    Check <|-- SecurityCheck
-    LLMBackend <|-- OllamaBackend
-    LLMBackend <|-- NIMBackend
-    LLMBackend <|-- NullBackend
-
-    Reader ..> Document : produces
-    Check ..> Issue : produces
-    Document *-- Section
-    Document *-- Figure
-    Document *-- Table
+    QWidget <|-- MainWindow
+    QThread <|-- BuildWorker
+    Document *-- Author
+    MainWindow ..> BuildWorker : starts
+    BuildWorker ..> Issue : emits
 ```
 
----
+Everything else is a **plain function**.
 
-## Three abstract base classes, three reasons
-
-### `Reader` — because input formats will grow
-
-```python
-class Reader(ABC):
-    @abstractmethod
-    def read(self, path: Path) -> Document: ...
-```
-
-Adding PDF support later means writing `PdfReader(Reader)` and registering it.
-Nothing downstream changes, because everything downstream only knows `Document`.
-
-This is the whole argument for having a document model at all.
-
-### `Check` — because rules are data, not code paths
-
-```python
-class Check(ABC):
-    name: str
-    severity: Severity
-
-    @abstractmethod
-    def run(self, pdf: Path, rules: dict) -> list[Issue]: ...
-```
-
-The entire compliance report is then:
-
-```python
-report = [issue for check in REGISTRY for issue in check.run(pdf, rules)]
-```
-
-A new conference requirement becomes one new class and one registry entry.
-No `if/elif` chain anywhere in the codebase.
-
-### `LLMBackend` — because the AI must be optional
-
-```python
-class NullBackend(LLMBackend):
-    def explain(self, issue: Issue) -> str:
-        return issue.message          # the rule already said it plainly
-```
-
-`NullBackend` is not a stub. It is the **default**, and it is why the claim
-"works fully offline with no model" is structurally true rather than a promise.
-
----
-
-## Where each concept is used
-
-| Python concept | Where | Why there |
+| File | Contents | Kind |
 |---|---|---|
-| `ABC` / `@abstractmethod` | `Reader`, `Check`, `LLMBackend` | Three genuine plug-in points |
-| `@dataclass` | `Document`, `Section`, `Figure`, `Issue` | Pure data; no behaviour to hide |
-| `Enum` | `Severity` (ERROR / WARNING / PASS) | Fixed, ordered vocabulary |
-| Composition | `Document` *contains* sections and figures | A figure is not a kind of document |
-| Inheritance | Only the three ABC families | Used where substitutability is real |
-| `pathlib.Path` | Everywhere | No string path concatenation |
-| `QThread` | Compile loop | Keeps the UI responsive |
-| Context managers | Temp build directories | Guaranteed cleanup after compile |
-| Type hints | Whole codebase | Checked with `mypy` |
-| `pytest` | `verify/` especially | Pure functions over fixture PDFs — trivially testable |
+| `models.py` | `Issue`, `Rules`, `Author`, `Document` | dataclasses, no logic beyond `Rules.load` |
+| `checks.py` | `check_fonts`, `check_page_count`, `check_security`, `check_bookmarks`, `run_all_checks` | pure functions: PDF path in, list of `Issue` out |
+| `document.py` | `document_from_latex` | pure string work |
+| `render.py` | `render(document, template)` | pure: Jinja2 template to a string |
+| `convert.py` | `docx_to_tex`, `find_custom_macros` | runs pandoc |
+| `compile.py` | `compile_pdf` | runs Tectonic |
+| `fix.py` | `embed_fonts` | runs Ghostscript |
+| `main.py` | argparse command line | entry point |
+| `gui.py` | `MainWindow`, `BuildWorker`, `build_paper` | entry point |
 
 ---
 
-## Why the verifier is the best-tested module
+## Why functions, not a `Check` class hierarchy
 
-Every check is a pure function of *(PDF, rules) → issues*. No UI, no network,
-no state. That makes it the one part of the system where a test suite is genuinely
-meaningful:
+A check takes a PDF and returns problems. It holds no state between calls, so a
+class would add a constructor and a `self` and nothing else.
 
 ```python
-def test_detects_unembedded_helvetica():
-    issues = FontCheck().run(FIXTURE / "matplotlib_bad.pdf", IEEE_RULES)
-    assert any("Helvetica" in i.message for i in issues)
-
-def test_clean_pdf_passes():
-    assert FontCheck().run(FIXTURE / "clean.pdf", IEEE_RULES) == []
+def run_all_checks(pdf_path, rules):
+    issues = []
+    issues += check_fonts(pdf_path)
+    issues += check_page_count(pdf_path, rules)
+    issues += check_security(pdf_path)
+    issues += check_bookmarks(pdf_path)
+    issues.sort(key=lambda issue: issue.severity != "error")
+    return issues
 ```
 
-We ship fixture PDFs — one deliberately broken matplotlib export, one clean —
-so the tests prove the flagship feature actually works.
+Adding a rule is one function and one line here. That is the same extension
+cost the class registry promised, without the registry.
 
 ---
 
-## What we deliberately avoided
+## Where classes are genuinely used
 
-- **No god class.** There is no `PrarupApp` that knows everything.
-- **No inheritance for code reuse.** Shared helpers are functions, not base classes.
-- **No LLM in the object graph's critical path.** `Check` has no reference to `LLMBackend`; the UI joins them at the last moment.
+| Class | Why it is a class |
+|---|---|
+| `Issue`, `Rules`, `Author`, `Document` | They hold data. `@dataclass` gives equality and a readable `repr`, which makes test failures easy to read. |
+| `Rules.load` (classmethod) | An alternative constructor that reads YAML and **rejects unknown keys**, so a typo in a preset fails loudly. |
+| `MainWindow(QWidget)` | Real inheritance: Qt requires it, and the window holds all its widgets as state. |
+| `BuildWorker(QThread)` | Real inheritance: runs the pipeline off the UI thread and reports back through Qt **signals**. |
+| `UnreadablePdf`, `TectonicNotFound`, `PandocNotFound`, `ConversionFailed`, `GhostscriptNotFound`, `RepairFailed` | Custom exceptions, so each failure reaches the user as one clear sentence. |
+
+---
+
+## The one architectural rule, enforced by a test
+
+`checks.py` must never touch the outside world: no `subprocess`, no Qt, no
+network. `tests/test_layering.py` reads the source and fails if any of those
+names appear. That keeps the checks fast, deterministic and trivially testable.
+
+---
+
+## Python concepts used, and where
+
+| Concept | Where |
+|---|---|
+| `@dataclass`, `field(default_factory=list)` | `models.py` |
+| `@classmethod` alternative constructor | `Rules.load` |
+| Inheritance from a framework class | `MainWindow(QWidget)`, `BuildWorker(QThread)` |
+| Signals and slots, worker thread | `BuildWorker.done` / `.failed` |
+| Custom exceptions, `raise ... from` | `checks.py`, `compile.py`, `convert.py`, `fix.py` |
+| `pathlib.Path` throughout | every module |
+| `subprocess.run` with captured output | `compile.py`, `convert.py`, `fix.py` |
+| Regular expressions | `document.py` (headings, figure placement), `convert.py` (macros) |
+| Jinja2 with custom delimiters | `render.py` |
+| `argparse` subcommands, exit codes | `main.py` |
+| Type hints | function signatures |
+| `pytest` fixtures, `tmp_path`, `monkeypatch`, `pytest-qt` | `tests/`, 105 tests |
+
+---
+
+## Not built yet
+
+The optional LLM layer. When it is built, the plan is still that **rules check
+and the model only explains**: the model would receive an `Issue` and return
+text, and nothing in `checks.py` would reference it.
 
 ---
 
