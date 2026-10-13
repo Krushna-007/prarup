@@ -91,3 +91,74 @@ def test_unembedded_font_is_reported():
 def test_unembedded_font_can_be_fixed():
     """Unlike Type3, Ghostscript can embed a referenced font in place."""
     assert check_fonts(FIXTURES / "unembedded.pdf")[0].can_fix is True
+
+
+def _same_font_on_pages(path, pages, fontname="helv"):
+    """A PDF that uses one unembedded font on several pages."""
+    import pymupdf
+
+    doc = pymupdf.open()
+    for _ in range(pages):
+        doc.new_page().insert_text((72, 100), "text", fontname=fontname)
+    doc.save(path)
+    doc.close()
+    return path
+
+
+def test_one_font_on_many_pages_is_reported_once(tmp_path):
+    """A real paper repeats a font on every page. One line per font, not per page."""
+    pdf = _same_font_on_pages(tmp_path / "many.pdf", 5)
+    issues = check_fonts(pdf)
+    assert len(issues) == 1
+    assert "pages 1-5" in issues[0].message
+
+
+def test_single_page_is_named(tmp_path):
+    pdf = _same_font_on_pages(tmp_path / "one.pdf", 1)
+    assert "page 1" in check_fonts(pdf)[0].message
+
+
+def test_page_list_collapses_runs():
+    from prarup.checks import describe_pages
+    assert describe_pages([1]) == "page 1"
+    assert describe_pages([3, 1, 2]) == "pages 1-3"
+    assert describe_pages([2, 5, 7, 8, 9]) == "pages 2, 5, 7-9"
+
+
+def test_subset_prefix_is_dropped_from_the_name():
+    """ABCDEF+Times is the same font as GHIJKL+Times. Name it once, plainly."""
+    from prarup.checks import plain_font_name
+    assert plain_font_name("FHXFSG+TimesNewRomanPSMT") == "TimesNewRomanPSMT"
+    assert plain_font_name("Helvetica") == "Helvetica"
+
+
+def test_a_font_with_no_name_is_still_described():
+    """Ghostscript rewrites Type3 fonts with an empty name."""
+    from prarup.checks import plain_font_name
+    assert plain_font_name("") == "an unnamed font"
+
+
+def test_type3_message_says_how_to_fix_it():
+    """The author cannot act on "Type3" alone. Tell them the setting."""
+    message = check_fonts(FIXTURES / "mpl_type3.pdf")[0].message
+    assert "pdf.fonttype" in message
+
+
+def test_a_file_that_is_not_a_pdf_raises_a_clear_error(tmp_path):
+    import pytest
+    from prarup.checks import UnreadablePdf
+
+    bad = tmp_path / "paper.pdf"
+    bad.write_text("not a pdf")
+    with pytest.raises(UnreadablePdf, match="paper.pdf is not a readable PDF"):
+        run_all_checks(bad, Rules())
+
+
+def test_a_tex_file_is_not_mistaken_for_a_pdf(tmp_path):
+    import pytest
+    from prarup.checks import UnreadablePdf
+
+    tex = tmp_path / "paper.tex"
+    tex.write_text(r"\documentclass{article}")
+    with pytest.raises(UnreadablePdf):
+        run_all_checks(tex, Rules())
