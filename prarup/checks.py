@@ -163,6 +163,29 @@ def check_security(pdf_path: Path) -> list[Issue]:
     )]
 
 
+def check_bookmarks(pdf_path: Path) -> list[Issue]:
+    """Report a PDF outline (bookmarks), usually left by hyperref.
+
+    A warning rather than an error: some IEEE pipelines reject them and
+    others do not. Not marked fixable, because Ghostscript keeps them.
+    """
+    doc = _open(pdf_path)
+    count = len(doc.get_toc())
+    doc.close()
+
+    if count == 0:
+        return []
+
+    plural = "s" if count > 1 else ""
+    return [Issue(
+        code="DOC-02",
+        message=(f"the PDF has {count} bookmark{plural}. Load hyperref with "
+                 "[bookmarks=false], or drop it"),
+        severity="warning",
+        can_fix=False,
+    )]
+
+
 def run_all_checks(pdf_path: Path, rules: Rules) -> list[Issue]:
     """Run every check and return the findings, errors first.
 
@@ -173,6 +196,7 @@ def run_all_checks(pdf_path: Path, rules: Rules) -> list[Issue]:
     issues += check_fonts(pdf_path)
     issues += check_page_count(pdf_path, rules)
     issues += check_security(pdf_path)
+    issues += check_bookmarks(pdf_path)
 
     # errors before warnings, so the blocking items are read first
     issues.sort(key=lambda issue: issue.severity != "error")
