@@ -176,3 +176,23 @@ def test_empty_title_still_falls_back_to_the_first_heading(tmp_path):
 
     build_paper(FIXTURES / "sample.docx", tmp_path, "ieee", Rules())
     assert r"\title{Sample Paper}" in (tmp_path / "sample.tex").read_text()
+
+
+def test_window_rules_come_from_the_preset_file(qtbot, tmp_path, monkeypatch):
+    """Editing presets/ieee.yaml must change what the window checks,
+    exactly as it does for the command line."""
+    import prarup.gui
+
+    (tmp_path / "ieee.yaml").write_text("page_limit: 4\n")
+    monkeypatch.setattr(prarup.gui, "PRESETS", tmp_path)
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    assert window.current_rules().page_limit == 4
+
+
+def test_unknown_template_falls_back_to_defaults(tmp_path, monkeypatch):
+    import prarup.gui
+
+    monkeypatch.setattr(prarup.gui, "PRESETS", tmp_path)
+    assert prarup.gui.rules_for("nothing") == Rules()
