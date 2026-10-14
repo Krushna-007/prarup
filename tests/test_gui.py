@@ -229,3 +229,36 @@ def test_fit_figures_shows_what_changed(qtbot, tmp_path):
     qtbot.waitUntil(lambda: window.build_button.isEnabled(), timeout=10000)
     assert "Fig. 1" in window.fit_report.toPlainText()
     assert window.pdf_path.name == "paper-fitted.pdf"
+
+
+# ---------------------------------------------------------------- front matter
+
+@pytest.mark.skipif(shutil.which("pandoc") is None, reason="pandoc not installed")
+def test_opening_a_word_file_fills_in_what_it_found(qtbot, tmp_path):
+    import subprocess
+
+    (tmp_path / "p.md").write_text(
+        "**Federated Learning on Drones**\n\nAsha Rao, DA-IICT\n\nVikram Shah, IIT Bombay\n\n"
+        "***Abstract*---We show a 12% gain.**\n\n# Introduction\n\nText.\n"
+    )
+    subprocess.run(["pandoc", "p.md", "-o", "p.docx"], cwd=tmp_path, check=True)
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.load(tmp_path / "p.docx")
+
+    assert window.title_edit.text() == "Federated Learning on Drones"
+    assert [(a.name, a.affiliation) for a in window.collect_authors()] == [
+        ("Asha Rao", "DA-IICT"), ("Vikram Shah", "IIT Bombay")]
+    assert window.abstract_edit.toPlainText() == "We show a 12% gain."
+    assert "found title, authors, abstract" in window.status.text()
+
+
+@pytest.mark.skipif(shutil.which("pandoc") is None, reason="pandoc not installed")
+def test_a_word_file_with_nothing_to_find_says_so(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.title_edit.setText("left over from the last file")
+    window.load(FIXTURES / "sample.docx")
+    assert window.title_edit.text() == ""
+    assert "Type them in" in window.status.text()
