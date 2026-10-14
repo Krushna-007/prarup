@@ -10,8 +10,9 @@ repaired automatically, and where it cannot, what the author has to do.
 | **GEOM-01** | Over the page limit | Warning | No | Built |
 | **DOC-01** | Encryption or permission flags | Error | Yes, Ghostscript | Built |
 | **DOC-02** | Bookmarks (PDF outline) | Warning | No | Built |
+| **GEOM-02** | Figure runs past its column | Error | Yes, **Fit figures** | Built |
 | PDFA-01 | PDF/A-1b conformance | n/a | n/a | Deferred, see below |
-| GEOM-02 | Margins and column width | n/a | n/a | Not built |
+| GEOM-03 | Text margins | n/a | n/a | Not built |
 | STRUCT-01 | Caption placement | n/a | n/a | Not built |
 
 All of them live in `prarup/checks.py` as plain functions.
@@ -178,7 +179,18 @@ fonts, security and bookmarks. When added, it should use veraPDF
 (`verapdf -f 1b --format json`) and say *"claimed, not validated"* when only the
 XMP metadata is available.
 
-### Not built: GEOM-02 margins, STRUCT-01 caption placement
+### GEOM-02 · Figure runs past its column
+
+**Severity** Error · **Auto-fix** Yes, with the figure fitter
+
+A Word figure keeps its size in inches, so a wide one runs across the other
+column. The IEEE template records the column and text widths in the PDF's
+document info; the check compares every image with them. A `figure*` centred
+over the whole text block is wide on purpose and not reported. PDFs Prarup did
+not build carry no widths, so the check stays quiet on them. The repair is the
+figure fitter: [15 · The Figure Fitter](15-figure-fitter.md).
+
+### Not built: GEOM-03 text margins, STRUCT-01 caption placement
 
 Margins need measured values per conference and are prone to false positives
 from page stamps such as the Xplore banner. Caption placement needs a parsed

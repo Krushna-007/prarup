@@ -72,15 +72,19 @@ Everything else is a **plain function**.
 
 | File | Contents | Kind |
 |---|---|---|
-| `models.py` | `Issue`, `Rules`, `Author`, `Document` | dataclasses, no logic beyond `Rules.load` |
-| `checks.py` | `check_fonts`, `check_page_count`, `check_security`, `check_bookmarks`, `run_all_checks` | pure functions: PDF path in, list of `Issue` out |
+| `models.py` | `Issue`, `Rules`, `Author`, `Document`, `Graphic`, `Measured`, `Geometry`, `FigureChange`, `FitReport` | dataclasses; `Rules.load`, `Geometry.bounds` and two small properties are the only logic |
+| `checks.py` | `check_fonts`, `check_page_count`, `check_security`, `check_bookmarks`, `check_figure_overflow`, `run_all_checks` | pure functions: PDF path in, list of `Issue` out |
 | `document.py` | `document_from_latex` | pure string work |
+| `frontmatter.py` | `split_front_matter`, `latex_to_plain`, `escape_latex` | pure string work: title, authors, abstract from a Word paper |
+| `figures.py` | `find_graphics`, `resize`, `instrument` | pure string work: find and resize `\includegraphics` |
+| `measure.py` | `measure`, `ocr_text_per_width` | reads the PDF, runs Tesseract |
+| `fit.py` | `fit_paper`, `describe` | the figure fitter loop, runs Tectonic |
 | `render.py` | `render(document, template)` | pure: Jinja2 template to a string |
-| `convert.py` | `docx_to_tex`, `find_custom_macros` | runs pandoc |
+| `convert.py` | `docx_to_tex`, `detect_front_matter`, `docx_to_document`, `find_custom_macros` | runs pandoc |
 | `compile.py` | `compile_pdf` | runs Tectonic |
 | `fix.py` | `embed_fonts` | runs Ghostscript |
 | `main.py` | argparse command line | entry point |
-| `gui.py` | `MainWindow`, `BuildWorker`, `build_paper` | entry point |
+| `gui.py` | `MainWindow`, `BuildWorker`, `build_paper`, `fit_figures` | entry point |
 
 ---
 
@@ -113,7 +117,7 @@ cost the class registry promised, without the registry.
 | `Rules.load` (classmethod) | An alternative constructor that reads YAML and **rejects unknown keys**, so a typo in a preset fails loudly. |
 | `MainWindow(QWidget)` | Real inheritance: Qt requires it, and the window holds all its widgets as state. |
 | `BuildWorker(QThread)` | Real inheritance: runs the pipeline off the UI thread and reports back through Qt **signals**. |
-| `UnreadablePdf`, `TectonicNotFound`, `PandocNotFound`, `ConversionFailed`, `GhostscriptNotFound`, `RepairFailed` | Custom exceptions, so each failure reaches the user as one clear sentence. |
+| `UnreadablePdf`, `TectonicNotFound`, `PandocNotFound`, `ConversionFailed`, `GhostscriptNotFound`, `RepairFailed`, `FitFailed` | Custom exceptions, so each failure reaches the user as one clear sentence. |
 
 ---
 
@@ -135,12 +139,15 @@ names appear. That keeps the checks fast, deterministic and trivially testable.
 | Signals and slots, worker thread | `BuildWorker.done` / `.failed` |
 | Custom exceptions, `raise ... from` | `checks.py`, `compile.py`, `convert.py`, `fix.py` |
 | `pathlib.Path` throughout | every module |
-| `subprocess.run` with captured output | `compile.py`, `convert.py`, `fix.py` |
-| Regular expressions | `document.py` (headings, figure placement), `convert.py` (macros) |
+| `subprocess.run` with captured output | `compile.py`, `convert.py`, `fix.py`, `measure.py` |
+| `@property` | `Measured.width`, `Measured.text_pt` |
+| Closures | `fit_paper`'s `layout(t)` and `pages_at(t)` share its measurements |
+| Binary search | `fit_paper`, over the shrink factor `t` |
+| Regular expressions | `document.py` (headings, figure placement), `frontmatter.py` (abstract, keywords, names), `figures.py` (graphics, environments), `convert.py` (macros) |
 | Jinja2 with custom delimiters | `render.py` |
 | `argparse` subcommands, exit codes | `main.py` |
 | Type hints | function signatures |
-| `pytest` fixtures, `tmp_path`, `monkeypatch`, `pytest-qt` | `tests/`, 105 tests |
+| `pytest` fixtures, `tmp_path`, `monkeypatch`, `pytest-qt` | `tests/`, 160 tests |
 
 ---
 
