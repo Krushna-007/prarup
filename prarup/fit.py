@@ -69,7 +69,10 @@ def plan(graphic, m, geometry, min_pt: float):
     """(width, double, smallest_width, note) for one measured graphic."""
     double = graphic.env == "figure*"
     k = m.text_per_width
-    smallest = min_pt / k if k else None
+    # aim SLACK wider: the built figure comes out up to a point narrower
+    # than asked, and the width is rounded down, which would otherwise
+    # leave its text a hair under the minimum
+    smallest = min_pt / k + SLACK if k else None
 
     if smallest is not None and smallest > geometry.text:
         widest = geometry.text if double else geometry.column

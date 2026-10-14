@@ -121,3 +121,19 @@ def test_a_word_figure_wider_than_the_column_fails_the_build_and_fit_repairs_it(
     report, issues = fit_figures(tmp_path / "paper.docx", tmp_path / "fit", "ieee", Rules())
     assert "GEOM-02" not in [i.code for i in issues]
     assert report.changes[0].double_after is True
+
+
+@pytest.mark.skipif(shutil.which("pandoc") is None or shutil.which("tectonic") is None,
+                    reason="pandoc and tectonic needed")
+def test_the_demo_paper_goes_red_then_green(tmp_path):
+    """The exact demo: open, build (overlap found), fit (overlap gone)."""
+    from prarup.gui import build_paper, fit_figures
+    from prarup.models import Rules
+
+    demo = FIXTURES / "demo_paper.docx"
+    _, issues = build_paper(demo, tmp_path / "build", "ieee", Rules())
+    assert [i.code for i in issues] == ["GEOM-02"]
+
+    report, issues = fit_figures(demo, tmp_path / "fit", "ieee", Rules())
+    assert issues == []
+    assert report.changes[0].text_after >= 7
