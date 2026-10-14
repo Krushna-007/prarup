@@ -32,8 +32,7 @@ from PySide6.QtWidgets import (
 
 from prarup.checks import run_all_checks
 from prarup.compile import compile_pdf
-from prarup.convert import docx_to_tex
-from prarup.document import document_from_latex
+from prarup.convert import detect_front_matter, docx_to_document
 from prarup.fit import describe, fit_paper
 from prarup.fix import embed_fonts
 from prarup.models import Author, Rules
@@ -62,13 +61,8 @@ def source_tex(source: Path, out_dir: Path, template: str,
     if source.suffix.lower() != ".docx":
         return source
 
-    fragment = docx_to_tex(source, out_dir, standalone=False)
-    document = document_from_latex(
-        fragment.read_text(),
-        title=title,
-        authors=authors or [],
-        abstract=abstract,
-    )
+    document, _ = docx_to_document(source, out_dir, title=title,
+                                   authors=authors or [], abstract=abstract)
     tex_path = out_dir / (source.stem + ".tex")
     tex_path.write_text(render(document, template=template))
     return tex_path
@@ -340,6 +334,31 @@ class MainWindow(QWidget):
         self.fit_button.setEnabled(path.suffix.lower() in (".docx", ".tex"))
         self.fit_report.clear()
         self.status.setText(f"Ready: {path.name}")
+        if path.suffix.lower() == ".docx":
+            self.fill_from(path)
+
+    def fill_from(self, docx: Path) -> None:
+        """Put the title, authors and abstract found in a Word file into the fields.
+
+        Replaces whatever was there, since it belonged to the previous file.
+        Everything stays editable, and what is in the fields is what gets built.
+        """
+        try:
+            found = detect_front_matter(docx)
+        except Exception as exc:              # noqa: BLE001 - shown to the user
+            self.status.setText(f"Could not read {docx.name}: {exc}")
+            return
+
+        self.title_edit.setText(found["title"])
+        self.set_authors([(a.name, a.affiliation) for a in found["authors"]])
+        self.abstract_edit.setPlainText(found["abstract"])
+
+        seen = [label for label, key in [("title", "title"), ("authors", "authors"),
+                                         ("abstract", "abstract")] if found[key]]
+        if seen:
+            self.status.setText(f"{docx.name}: found {', '.join(seen)}. Check them, then Build.")
+        else:
+            self.status.setText(f"{docx.name}: no title, authors or abstract found. Type them in.")
 
     def current_rules(self) -> Rules:
         return rules_for(self.template_box.currentData())

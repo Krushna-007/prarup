@@ -15,12 +15,11 @@ from prarup.compile import TectonicNotFound, compile_pdf
 from prarup.convert import (
     ConversionFailed,
     PandocNotFound,
-    docx_to_tex,
+    docx_to_document,
     find_custom_macros,
 )
 from prarup.fit import FitFailed, describe, fit_paper
 from prarup.fix import GhostscriptNotFound, RepairFailed, embed_fonts
-from prarup.document import document_from_latex
 from prarup.models import Author, Rules
 from prarup.render import render
 
@@ -53,6 +52,23 @@ def parse_authors(values: list[str] | None) -> list[Author]:
     return authors
 
 
+def describe_found(found: dict, args) -> str:
+    """One line saying what was read from the Word file, and what was typed."""
+    parts = []
+    for label, key, typed in [("title", "title", args.title),
+                              ("authors", "authors", args.author),
+                              ("abstract", "abstract", args.abstract)]:
+        if typed:
+            parts.append(f"{label} from the command line")
+        elif found.get(key):
+            value = found[key]
+            shown = f"{len(value)} found" if isinstance(value, list) else "found"
+            parts.append(f"{label} {shown}")
+        else:
+            parts.append(f"no {label} found")
+    return "Word file: " + ", ".join(parts)
+
+
 def prepare_tex(source: Path, out_dir: Path, args) -> Path:
     """Return a .tex path ready to compile.
 
@@ -63,23 +79,21 @@ def prepare_tex(source: Path, out_dir: Path, args) -> Path:
     if source.suffix.lower() != ".docx":
         return source
 
-    fragment_path = docx_to_tex(source, out_dir, standalone=False)
-    fragment = fragment_path.read_text()
+    document, found = docx_to_document(
+        source, out_dir,
+        title=args.title or "",
+        authors=parse_authors(args.author),
+        abstract=args.abstract or "",
+    )
 
-    macros = find_custom_macros(fragment)
+    macros = find_custom_macros(document.body)
     if macros:
         print(
             "warning: custom macros may not have survived conversion: "
             + ", ".join(sorted(set(macros))),
             file=sys.stderr,
         )
-
-    document = document_from_latex(
-        fragment,
-        title=args.title or "",
-        authors=parse_authors(args.author),
-        abstract=args.abstract or "",
-    )
+    print(describe_found(found, args), file=sys.stderr)
 
     tex_path = out_dir / (source.stem + ".tex")
     tex_path.write_text(render(document, template=args.template))

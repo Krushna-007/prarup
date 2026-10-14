@@ -5,6 +5,7 @@ Pure string work. No file access, no subprocess.
 
 import re
 
+from prarup.frontmatter import escape_latex
 from prarup.models import Author, Document
 
 # \section{Title} optionally followed by pandoc's \label{...}
@@ -61,8 +62,13 @@ def document_from_latex(
     title: str = "",
     authors: list[Author] | None = None,
     abstract: str = "",
+    keywords: str = "",
 ) -> Document:
     """Turn a LaTeX body fragment into a Document.
+
+    title, authors, abstract and keywords are plain text, as typed in the
+    window or found by frontmatter.py, and are escaped here. A title taken
+    from the fragment's own heading is LaTeX already and is used as is.
 
     A word processor document usually carries its own name as the single
     top-level heading, with the real sections nested under it. That
@@ -85,6 +91,7 @@ def document_from_latex(
 
     Several top-level headings are always real sections.
     """
+    title = escape_latex(title)
     body = fragment
     only_heading = len(_ALL_SECTIONS.findall(body)) == 1
     has_subsections = _ANY_SUBSECTION.search(body) is not None
@@ -101,7 +108,9 @@ def document_from_latex(
 
     return Document(
         title=title,
-        authors=authors or [],
-        abstract=abstract,
+        authors=[Author(escape_latex(a.name), escape_latex(a.affiliation))
+                 for a in authors or []],
+        abstract=escape_latex(abstract),
+        keywords=escape_latex(keywords),
         body=body.strip(),
     )
