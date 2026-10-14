@@ -34,6 +34,7 @@ from prarup.checks import run_all_checks
 from prarup.compile import compile_pdf
 from prarup.convert import docx_to_tex
 from prarup.document import document_from_latex
+from prarup.fit import describe, fit_paper
 from prarup.fix import embed_fonts
 from prarup.models import Author, Rules
 from prarup.render import render
@@ -54,6 +55,33 @@ def format_issue(issue) -> str:
     return f"{label}   {issue.code}   {issue.message}{suffix}"
 
 
+def source_tex(source: Path, out_dir: Path, template: str,
+               title: str = "", authors: list | None = None, abstract: str = "") -> Path:
+    """The .tex to compile: a .docx is converted and templated, a .tex is used as is."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if source.suffix.lower() != ".docx":
+        return source
+
+    fragment = docx_to_tex(source, out_dir, standalone=False)
+    document = document_from_latex(
+        fragment.read_text(),
+        title=title,
+        authors=authors or [],
+        abstract=abstract,
+    )
+    tex_path = out_dir / (source.stem + ".tex")
+    tex_path.write_text(render(document, template=template))
+    return tex_path
+
+
+def fit_figures(source: Path, out_dir: Path, template: str, rules: Rules,
+                title: str = "", authors: list | None = None, abstract: str = ""):
+    """Fit the figures, then check the fitted PDF. Returns (report, issues)."""
+    tex_path = source_tex(source, out_dir, template, title, authors, abstract)
+    report = fit_paper(tex_path, out_dir, rules)
+    return report, run_all_checks(report.pdf, rules)
+
+
 def build_paper(
     source: Path,
     out_dir: Path,
@@ -69,23 +97,10 @@ def build_paper(
     and the CLI cannot drift apart. A blank title falls back to the first
     heading in the document.
     """
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    if source.suffix.lower() == ".docx":
-        fragment = docx_to_tex(source, out_dir, standalone=False)
-        document = document_from_latex(
-            fragment.read_text(),
-            title=title,
-            authors=authors or [],
-            abstract=abstract,
-        )
-        tex_path = out_dir / (source.stem + ".tex")
-        tex_path.write_text(render(document, template=template))
-    elif source.suffix.lower() == ".pdf":
+    if source.suffix.lower() == ".pdf":
         return source, run_all_checks(source, rules)
-    else:
-        tex_path = source
 
+    tex_path = source_tex(source, out_dir, template, title, authors, abstract)
     pdf_path, log = compile_pdf(tex_path, out_dir)
     if not pdf_path.exists():
         raise RuntimeError(log or "compilation produced no PDF")
@@ -97,11 +112,14 @@ class BuildWorker(QThread):
     """Runs the pipeline off the UI thread so the window stays responsive."""
 
     done = Signal(object, object)   # pdf_path, issues
+    fitted = Signal(object)         # report lines, sent before done
     failed = Signal(str)
 
     def __init__(self, source: Path, out_dir: Path, template: str,
-                 rules: Rules, title: str, authors: list, abstract: str):
+                 rules: Rules, title: str, authors: list, abstract: str,
+                 fit: bool = False):
         super().__init__()
+        self.fit = fit
         self.source = source
         self.out_dir = out_dir
         self.template = template
@@ -111,15 +129,19 @@ class BuildWorker(QThread):
         self.abstract = abstract
 
     def run(self) -> None:
+        job = fit_figures if self.fit else build_paper
         try:
-            pdf_path, issues = build_paper(
+            result, issues = job(
                 self.source, self.out_dir, self.template, self.rules,
                 title=self.title, authors=self.authors, abstract=self.abstract,
             )
         except Exception as exc:              # noqa: BLE001 - shown to the user
             self.failed.emit(str(exc))
-        else:
-            self.done.emit(pdf_path, issues)
+            return
+        if self.fit:
+            self.fitted.emit(describe(result))
+            result = result.pdf
+        self.done.emit(result, issues)
 
 
 class MainWindow(QWidget):
@@ -140,6 +162,12 @@ class MainWindow(QWidget):
         self.template_box.addItem("IEEE Conference", "ieee")
         self.build_button = QPushButton("Build")
         self.build_button.setEnabled(False)
+        self.fit_button = QPushButton("Fit figures")
+        self.fit_button.setEnabled(False)
+        self.fit_button.setToolTip(
+            "Resize figures to fit their columns and the page limit, "
+            "keeping their text readable"
+        )
         self.status = QLabel("Open a .docx, .tex or .pdf to begin.")
 
         top = QHBoxLayout()
@@ -147,6 +175,7 @@ class MainWindow(QWidget):
         top.addWidget(QLabel("Template:"))
         top.addWidget(self.template_box)
         top.addWidget(self.build_button)
+        top.addWidget(self.fit_button)
         top.addStretch()
         top.addWidget(self.status)
 
@@ -216,10 +245,18 @@ class MainWindow(QWidget):
         self.fix_button = QPushButton("Fix what can be fixed")
         self.fix_button.setEnabled(False)
 
+        # what the fitter changed, one line per figure
+        self.fit_report = QPlainTextEdit()
+        self.fit_report.setReadOnly(True)
+        self.fit_report.setPlaceholderText("Click Fit figures to resize them.")
+        self.fit_report.setMaximumHeight(170)
+
         right = QVBoxLayout()
         right.addWidget(QLabel("Compliance"))
         right.addWidget(self.issue_list)
         right.addWidget(self.fix_button)
+        right.addWidget(QLabel("Figures"))
+        right.addWidget(self.fit_report)
 
         right_panel = QWidget()
         right_panel.setLayout(right)
@@ -237,6 +274,7 @@ class MainWindow(QWidget):
 
         self.open_button.clicked.connect(self.choose_file)
         self.build_button.clicked.connect(self.start_build)
+        self.fit_button.clicked.connect(self.start_fit)
         self.fix_button.clicked.connect(self.repair)
 
     # --------------------------------------------------------------- metadata
@@ -298,16 +336,23 @@ class MainWindow(QWidget):
     def load(self, path: Path) -> None:
         self.source = path
         self.build_button.setEnabled(True)
+        # fitting rewrites LaTeX, so it needs the source, not a finished PDF
+        self.fit_button.setEnabled(path.suffix.lower() in (".docx", ".tex"))
+        self.fit_report.clear()
         self.status.setText(f"Ready: {path.name}")
 
     def current_rules(self) -> Rules:
         return rules_for(self.template_box.currentData())
 
-    def start_build(self) -> None:
+    def start_fit(self) -> None:
+        self.start_build(fit=True)
+
+    def start_build(self, fit: bool = False) -> None:
         if self.source is None:
             return
         self.build_button.setEnabled(False)
-        self.status.setText("Building…")
+        self.fit_button.setEnabled(False)
+        self.status.setText("Fitting figures…" if fit else "Building…")
 
         self.worker = BuildWorker(
             self.source, self.source.parent / "build",
@@ -315,7 +360,9 @@ class MainWindow(QWidget):
             title=self.title_edit.text().strip(),
             authors=self.collect_authors(),
             abstract=self.abstract_edit.toPlainText().strip(),
+            fit=fit,
         )
+        self.worker.fitted.connect(self.show_fit)
         self.worker.done.connect(self.on_done)
         self.worker.failed.connect(self.on_failed)
         self.worker.start()
@@ -338,13 +385,22 @@ class MainWindow(QWidget):
         self.pdf_path = Path(pdf_path)
         self.pdf_document.load(str(pdf_path))
         self.show_issues(issues)
-        self.build_button.setEnabled(True)
+        self.enable_actions()
 
     def on_failed(self, message: str) -> None:
         self.status.setText("Build failed")
         self.issue_list.clear()
         self.issue_list.addItem(QListWidgetItem(message))
-        self.build_button.setEnabled(True)
+        self.enable_actions()
+
+    def enable_actions(self) -> None:
+        self.build_button.setEnabled(self.source is not None)
+        self.fit_button.setEnabled(
+            self.source is not None and self.source.suffix.lower() in (".docx", ".tex")
+        )
+
+    def show_fit(self, lines: list) -> None:
+        self.fit_report.setPlainText("\n".join(lines))
 
     def show_issues(self, issues: list) -> None:
         self.issues = issues
