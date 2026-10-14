@@ -89,6 +89,49 @@ def make_docx_with_image(path: Path) -> None:
         subprocess.run(["pandoc", str(md), "-o", str(path)], check=True, cwd=tmp)
 
 
+def make_demo_paper(path: Path) -> None:
+    """A Word paper laid out the way students write them, for the demo.
+
+    Title, authors and abstract are plain paragraphs, and the figure keeps
+    the 5.8 inch width it had in Word, so it runs across the second IEEE
+    column. Build reports GEOM-02; Fit figures moves it across both
+    columns, where its 10 pt text prints at 7 pt instead of 4.
+    """
+    import shutil
+    import subprocess
+    import tempfile
+
+    if shutil.which("pandoc") is None:
+        print("pandoc not found, skipping the demo paper")
+        return
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        fig, ax = plt.subplots(figsize=(8, 3))
+        ax.plot([1, 2, 3, 4, 5], [61, 72, 78, 81, 83], marker="o", label="proposed")
+        ax.plot([1, 2, 3, 4, 5], [58, 64, 69, 72, 74], marker="s", label="baseline")
+        ax.set_xlabel("communication round", fontsize=10)
+        ax.set_ylabel("accuracy (%)", fontsize=10)
+        ax.legend(fontsize=10)
+        fig.tight_layout()
+        fig.savefig(tmp / "accuracy.png", dpi=150)
+        plt.close(fig)
+
+        words = ("Federated learning lets drones train a shared model without "
+                 "sending raw data to a server. ")
+        (tmp / "paper.md").write_text(
+            "**Federated Learning on Drone Swarms**\n\n"
+            "Prateek Kalal, DA-IICT\n\nOm Patel, DA-IICT\n\nKrushna Parmar, DA-IICT\n\n"
+            "***Abstract*---We study federated learning on UAV swarms and show a "
+            "12% gain in accuracy over a baseline.**\n\n"
+            "*Index Terms*---federated learning, UAV, edge computing\n\n"
+            "# Introduction\n\n" + words * 12 + "\n\n"
+            "![Accuracy over communication rounds](accuracy.png){width=5.8in}\n\n"
+            "# Results\n\n" + words * 10 + "\n"
+        )
+        subprocess.run(["pandoc", "paper.md", "-o", str(path)], check=True, cwd=tmp)
+
+
 def make_unembedded_font(path: Path) -> None:
     """Save a PDF that references a base-14 font without embedding it.
 
@@ -124,6 +167,7 @@ def main() -> None:
     make_unembedded_font(FIXTURES / "unembedded.pdf")
 
     make_docx_with_image(FIXTURES / "sample.docx")
+    make_demo_paper(FIXTURES / "demo_paper.docx")
 
     print(f"wrote fixtures to {FIXTURES}")
 
