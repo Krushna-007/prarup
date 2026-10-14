@@ -15,6 +15,10 @@
 \providecommand{\tightlist}{%
   \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
 
+%% Records the column and text widths in the PDF's document info, so
+%% Prarup can tell when a figure runs past its column. Changes nothing visible.
+\AtBeginDocument{\special{pdf:docinfo << /PrarupGeometry (\the\columnwidth\space\the\textwidth\space\the\dimexpr1in+\hoffset+\oddsidemargin\relax\space\the\columnsep) >>}}
+
 \begin{document}
 
 \title{\VAR{ doc.title }}

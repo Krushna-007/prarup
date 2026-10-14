@@ -195,3 +195,60 @@ def test_no_bookmarks_is_clean():
 def test_run_all_checks_includes_bookmarks(tmp_path):
     issues = run_all_checks(_with_bookmarks(tmp_path / "marked.pdf"), Rules())
     assert "DOC-02" in [i.code for i in issues]
+
+
+def _two_column_page(path, image_rect, geometry=(252, 516, 49.15, 12)):
+    """One page with a bitmap at image_rect and Prarup's geometry note."""
+    import pymupdf
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    pixels = pymupdf.Pixmap(pymupdf.csGRAY, 10, 10, bytes(100), False)
+    page.insert_image(pymupdf.Rect(*image_rect), pixmap=pixels, keep_proportion=False)
+    if geometry:
+        column, text, left, gap = geometry
+        info = doc.xref_get_key(-1, "Info")
+        if info[0] != "xref":
+            doc.set_metadata({"creator": "test"})
+            info = doc.xref_get_key(-1, "Info")
+        doc.xref_set_key(int(info[1].split()[0]), "PrarupGeometry",
+                         f"({column}pt {text}pt {left}pt {gap}pt)")
+    doc.save(path)
+    doc.close()
+    return path
+
+
+def test_a_figure_running_past_its_column_is_an_error(tmp_path):
+    """What pandoc makes of a 5.8 in figure from Word: it starts at the
+    left column and runs across the right one."""
+    from prarup.checks import check_figure_overflow
+
+    pdf = _two_column_page(tmp_path / "p.pdf", (49, 200, 469, 350))
+    [issue] = check_figure_overflow(pdf)
+    assert issue.code == "GEOM-02"
+    assert issue.severity == "error"
+    assert "page 1" in issue.message and "Fit figures" in issue.message
+
+
+def test_a_figure_inside_its_column_is_fine(tmp_path):
+    from prarup.checks import check_figure_overflow
+
+    assert check_figure_overflow(_two_column_page(tmp_path / "p.pdf", (60, 200, 290, 350))) == []
+
+
+def test_a_figure_centred_across_both_columns_is_fine(tmp_path):
+    """figure* is centred over the whole text block. That is not overflow."""
+    from prarup.checks import check_figure_overflow
+
+    left, text, width = 49.15, 516, 420
+    x0 = left + (text - width) / 2
+    pdf = _two_column_page(tmp_path / "p.pdf", (x0, 60, x0 + width, 200))
+    assert check_figure_overflow(pdf) == []
+
+
+def test_without_geometry_the_overflow_check_stays_quiet(tmp_path):
+    """A PDF Prarup did not build has no column widths to compare with."""
+    from prarup.checks import check_figure_overflow
+
+    pdf = _two_column_page(tmp_path / "p.pdf", (49, 200, 469, 350), geometry=None)
+    assert check_figure_overflow(pdf) == []
