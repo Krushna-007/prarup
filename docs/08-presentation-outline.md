@@ -1,6 +1,6 @@
 # 08 · Presentation Outline
 
-**12 slides.** Product story first, one dedicated Python design slide.
+**13 slides.** Product story first, one dedicated Python design slide.
 Copy this content into the PPT template as-is.
 
 > **If you run short on time, cut slide 4 or slide 11. Never cut slide 7.**
@@ -132,6 +132,30 @@ The value is not algorithmic difficulty. It is that nobody bothered."
 
 ---
 
+## Slide 7b — ⭐ The figure fitter
+
+**The second thing nobody checks: figures that no longer fit, or no longer read.**
+
+| Build: the chart runs into the second column | Fit figures: across both columns, text 7.0 pt |
+|---|---|
+| `docs/images/window-overlap.png` | `docs/images/window-fitted.png` |
+
+1. **Measure.** LaTeX reports the column widths; every graphic is wrapped in an
+   invisible link, so its exact box comes back from the PDF. Text size inside
+   the figure: from its own text if vector, **Tesseract OCR** if a bitmap
+   (calibrated: within half a point).
+2. **Decide.** Widest that fits the column. If that drops its text below 7 pt,
+   span both columns instead.
+3. **Page limit.** Shrink figures together by **binary search**, never below
+   7 pt. If it still does not fit: *"about 0.4 pages over, cut text."*
+4. **Verify.** Measure the result again. Never trust the arithmetic.
+
+**Say:** "Shrinking a figure to fit is easy. Shrinking it without making it
+unreadable is the hard part. The IEEE journal paper we tested prints its figure
+labels at 2.4 pt. Prarup would not let that happen."
+
+---
+
 ## Slide 8 — Interface
 
 *Insert: `docs/images/window-clean.png` and `window-with-issue.png`*
@@ -154,7 +178,7 @@ see red, click Fix, see green. Then show the target mockup from
 - **Custom exceptions** so every failure reaches the user as one sentence
 - **One rule enforced by a test:** `checks.py` may not import `subprocess`,
   Qt or network code
-- **105 pytest tests**, the window included, run headless
+- **160 pytest tests**, the window included, run headless
 
 **Say:** "We designed three abstract base classes first, then deleted them when
 the code showed they had one implementation each. No abstraction until you need
@@ -172,6 +196,7 @@ it twice."
 | PDF inspection | **PyMuPDF** |
 | DOCX import | **pandoc** |
 | Font repair | **Ghostscript** |
+| OCR (figure text size) | **Tesseract** |
 | Packaging and tests | **Poetry**, **pytest**, **pytest-qt** |
 
 **Why Tectonic:** no 5 GB TeX Live install. It fetches only what the document uses
@@ -185,8 +210,9 @@ Python, Qt, LaTeX, Poetry. Greyscale except Python.
 ## Slide 11 — Scope
 
 **Built**
-✓ `.tex` + `.docx` in ✓ IEEE out ✓ PDF preview ✓ 5 compliance checks
-✓ One-click repair, re-checked ✓ Command line for scripts ✓ No AI needed
+✓ `.tex` + `.docx` in ✓ IEEE out ✓ PDF preview ✓ 6 compliance checks
+✓ One-click repair, re-checked ✓ **Figure fitter** ✓ Title, authors, abstract read from Word
+✓ Command line for scripts ✓ No AI needed
 
 **Next**
 Submission bundle export · auto-compile while typing · figure and caption
@@ -240,6 +266,16 @@ would only rephrase a verdict the rules already produced, and it is not built ye
 **"Does the fix damage my paper?"**
 No. It writes a separate `-fixed.pdf`, re-runs every check on it, and a test
 confirms figures render pixel-identical before and after.
+
+**"Is the fitter machine learning?"**
+No, and it does not need to be. It is a measure-and-adjust loop: the
+measurements are exact (LaTeX's own numbers, the PDF's own boxes) and the
+search is a binary search. The only learned component is Tesseract's OCR, used
+as a measuring instrument for text inside bitmaps.
+
+**"Why 7 pt?"**
+Our choice, set just under IEEE's 8 pt footnotes. It is one line in
+`presets/ieee.yaml` and can be changed.
 
 **"What about Type3 fonts?"**
 No tool can convert them after the fact, Ghostscript included; we test that.

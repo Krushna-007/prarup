@@ -404,4 +404,4 @@ and when you need a second one, then look at what they share.
 
 ---
 
-**Previous:** [← 13 · Pitfalls](13-pitfalls.md) · **Home:** [README](../README.md)
+**Previous:** [← 13 · Pitfalls](13-pitfalls.md) · **Next:** [15 · The Figure Fitter →](15-figure-fitter.md)

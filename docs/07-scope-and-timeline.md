@@ -12,9 +12,11 @@ what would be impressive to promise.
 | `.tex` and `.docx` input | ✅ Built |
 | IEEE Conference output (IEEEtran) | ✅ Built |
 | Live auto-compile with embedded PDF preview | Preview built; compile runs on **Build**, not on typing |
-| **Pre-flight compliance checker**, the flagship | ✅ Built: FONT-01, FONT-02, GEOM-01, DOC-01, DOC-02 |
+| **Pre-flight compliance checker**, the flagship | ✅ Built: FONT-01, FONT-02, GEOM-01, GEOM-02, DOC-01, DOC-02 |
+| Title, authors, abstract read from Word | ✅ Built |
+| **Figure fitter** (added after TA review) | ✅ Built |
 | One-click repair, re-checked | ✅ Built |
-| Figure, table and caption management | Not built |
+| Figure, table and caption management | Figure sizing ✅ (the figure fitter); captions and reordering not built |
 | Submission bundle export | Not built |
 | Fully functional with AI disabled | ✅ True: the AI layer is not built and nothing depends on it |
 

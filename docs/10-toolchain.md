@@ -27,6 +27,7 @@ matplotlib >= 3.8    # only tools/make_fixtures.py uses it
 | **tectonic** | LaTeX compilation | Yes, for `build` |
 | **pandoc** | `.docx` → LaTeX | Yes, for `.docx` input |
 | **gs** (Ghostscript) | Embedding referenced-but-missing fonts | Yes, for `--fix` / the Fix button |
+| **tesseract** | Text size inside bitmap figures, for the figure fitter | Optional: without it bitmap figures are only kept inside their column |
 
 Each is looked up with `shutil.which` before use. If one is missing the user is
 told which one and how to install it, rather than seeing a subprocess error.
@@ -34,7 +35,7 @@ told which one and how to install it, rather than seeing a subprocess error.
 ### Install (macOS)
 
 ```bash
-brew install tectonic pandoc ghostscript
+brew install tectonic pandoc ghostscript tesseract
 poetry install
 poetry run python tools/make_fixtures.py
 poetry run pytest

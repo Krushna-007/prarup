@@ -14,11 +14,11 @@ Necessary. Not interesting. Nobody will award marks for these alone.
 |---|---|---|
 | Import `.tex` / `.docx` | `.docx` goes through pandoc into the IEEE template; `.tex` compiles as written | ✅ Built |
 | Select target template | IEEE Conference for v1 | ✅ Built |
-| Title, authors, abstract fields | A `.docx` carries none of these, so they are typed in the window | ✅ Built |
+| Title, authors, abstract | Read from the Word file (styles, or the paragraphs above "Abstract"), shown in editable fields | ✅ Built |
 | Structured editor | Edit section text without touching LaTeX syntax | Not built |
 | Live auto-compile | Debounced ~800 ms, background thread | Partly: background build on **Build** click |
 | Embedded PDF preview | `QPdfView`, fit to width, multi-page | ✅ Built |
-| Figure & table manager | Reorder, resize, replace, edit captions, insert new | Not built |
+| Figure & table manager | Resize: ✅ the figure fitter. Reorder, replace, edit captions: not built | Partly |
 | Export | Compliant PDF + source bundle | Partly: repaired PDF is written; bundle zip not built |
 
 ---
@@ -45,7 +45,7 @@ Every result carries a **severity**, a **plain explanation** with the pages
 involved, and where the fix is deterministic, a **one-click repair** that is
 re-checked before it is reported.
 
-Differentiators 2, 4 and 5 below are **designed, not built**. Offline (3) is true
+Differentiator 2 is built as the figure fitter. 4 and 5 are **designed, not built**. Offline (3) is true
 today in the sense that matters: Prarup makes no network calls of its own. The
 visible toggle is not built, and Tectonic's first compile on a new machine
 downloads packages.
@@ -60,7 +60,12 @@ The value here is not algorithmic difficulty — it is that nobody bothered.
 
 ---
 
-### 2 · Page-budget optimiser
+### 2 · Page-budget optimiser (built as the figure fitter)
+
+> Built in its figure form: figures shrink together by binary search to meet the
+> page limit, never below a readable text size. See
+> [15 · The Figure Fitter](15-figure-fitter.md). Suggesting text cuts is not built.
+
 
 Not a word count. Measured on **rendered geometry**.
 
@@ -131,7 +136,7 @@ paper_submission.zip
 | Template conversion | ✗ | ✓ | ✗ | ✓ (.docx → IEEE) |
 | Live compile | ✓ | ✓ | ✗ | ✓ |
 | Figure-font audit | ✗ | ✗ | partial | **✓** |
-| Page-budget advice | ✗ | ✗ | ✗ | planned |
+| Fit figures, keep text readable | ✗ | ✗ | ✗ | **✓** |
 | Works offline | ✗ | ✗ | ✗ | **✓** |
 | Template breadth | n/a | **40,000+** | n/a | 1 (v1) |
 

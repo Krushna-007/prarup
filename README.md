@@ -80,6 +80,7 @@ will report successes it did not achieve. See
 | [12 · Implementation Notes](docs/12-implementation-notes.md) | The build pipeline, the worker thread, font inspection, docx conversion details |
 | [13 · Pitfalls](docs/13-pitfalls.md) | Silent failures, environment traps, demo rehearsal checklist |
 | [14 · How To Build It](docs/14-how-to-build.md) | Minimal design, walking skeleton, the first ten tests, design rules |
+| [15 · The Figure Fitter](docs/15-figure-fitter.md) | Fitting figures to their columns and the page limit without making their text unreadable |
 
 ---
 
@@ -98,14 +99,15 @@ will report successes it did not achieve. See
 ```bash
 poetry install
 poetry run python tools/make_fixtures.py     # generate test PDFs
-poetry run pytest                             # 105 tests
+poetry run pytest                             # 160 tests
 ```
 
 External tools: `tectonic` to compile, `pandoc` for `.docx`, `ghostscript` to
-repair fonts. On macOS:
+repair fonts, `tesseract` to read text inside bitmap figures (optional: without it,
+bitmap figures are kept inside their column but not sized for readability). On macOS:
 
 ```bash
-brew install tectonic pandoc ghostscript
+brew install tectonic pandoc ghostscript tesseract
 ```
 
 ## Using it
@@ -118,14 +120,30 @@ poetry run prarup build paper.docx \
 poetry run prarup build paper.tex           # compile, verify
 poetry run prarup check paper.pdf           # verify an existing PDF
 poetry run prarup check paper.pdf --fix     # repair, then re-verify
+poetry run prarup fit paper.docx            # resize figures to fit, keep their text readable
 poetry run prarup-gui                       # the desktop window
 ```
 
 ![The window](docs/images/window-clean.png)
 
-Title, authors and abstract are typed in the window, since a `.docx` carries
-none of them. The same values are `--title`, `--author` and `--abstract` on the
-command line.
+Title, authors and abstract are **read from the Word file**: from Word's own
+Title and Author styles when used, otherwise from the paragraphs above the one
+starting "Abstract". The window fills its fields with what it found, and
+anything typed there (or passed as `--title`, `--author`, `--abstract`) wins.
+
+### Fitting figures
+
+A Word figure keeps its size in inches, so a wide one runs across the second
+IEEE column. **Build** reports it (GEOM-02); **Fit figures** resizes every
+figure to fit its column, moves it across both columns if one column would
+shrink its text below 7 pt, and shrinks figures together when the paper is over
+the page limit, never below 7 pt. See [15 · The Figure Fitter](docs/15-figure-fitter.md).
+
+| Build: the chart runs into the second column | Fit figures: across both columns, text 7.0 pt |
+|---|---|
+| ![Before](docs/images/window-overlap.png) | ![After](docs/images/window-fitted.png) |
+
+Try it with `tests/fixtures/demo_paper.docx`.
 
 A `.docx` is converted to a body fragment, wrapped in the IEEE conference
 template, and compiled. A `.tex` is compiled as it stands, because there is no
@@ -153,10 +171,16 @@ their original resolution and compression.
 
 ## Status
 
-**v0.8.** Working: `.docx` and `.tex` input, IEEE template rendering, Tectonic
-compilation, five compliance checks (unembedded fonts, Type3 fonts, page limit,
-encryption, bookmarks), YAML rule presets, Ghostscript repair that is re-checked
-and leaves figures untouched, and a PySide6 window over all of it.
+**v0.9.** Working:
+
+- `.docx` and `.tex` input, IEEE conference template, Tectonic compilation
+- Title, authors, abstract and keywords read from the Word file
+- **The figure fitter**: figures fitted to their columns and the page limit with
+  their text kept at 7 pt or more, measured from the compiled PDF (OCR for bitmaps)
+- Six compliance checks: unembedded fonts, Type3 fonts, page limit, encryption,
+  bookmarks, figures past their column
+- Ghostscript repair, re-checked, that leaves figures untouched
+- A PySide6 window over all of it, and the same on the command line
 
 **Tested on a real paper.** A 13-page IEEE IoT Journal article: Prarup found the
 default-matplotlib Type3 fonts in its figures on pages 9 to 12, reported each
@@ -165,12 +189,9 @@ a pixel of any figure.
 
 **Python 3.11 to 3.13.** PySide6 publishes no wheels for 3.14 yet.
 
-105 tests pass, GUI included, headless. Two carry most of the weight: one builds a real paper containing a
-default matplotlib figure and confirms the defect is found in the compiled
-output, the other takes the `.docx` fixture all the way to a compliant IEEE PDF
-and checks the abstract still precedes the body.
+160 tests pass, GUI included, headless. Every expected number in the fitter's
+tests is worked out by hand from the plot's own text size and the IEEE geometry.
 
-Not built yet: submission bundle export, auto-compile while typing, the figure
-and caption manager, PDF/A, margin and caption checks, and the LLM advisory
-layer. See [07 · Scope](docs/07-scope-and-timeline.md) and
+Not built yet: submission bundle export, auto-compile while typing, a caption
+editor, PDF/A, margin and caption-placement checks, and the LLM advisory layer. See [07 · Scope](docs/07-scope-and-timeline.md) and
 [11 · Compliance Rules](docs/11-compliance-rules.md).

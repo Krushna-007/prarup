@@ -173,9 +173,13 @@ Flat, one file per job, as [14 · How To Build It](14-how-to-build.md) argues:
 
 ```
 prarup/
-├── models.py      Issue, Rules, Author, Document   (dataclasses)
+├── models.py      Issue, Rules, Author, Document … (dataclasses)
 ├── checks.py      the compliance checks             (pure, no subprocess)
 ├── document.py    pandoc fragment → Document        (pure)
+├── frontmatter.py title, authors, abstract from Word (pure)
+├── figures.py     find and resize \includegraphics  (pure)
+├── measure.py     figure boxes and text size        (runs Tesseract)
+├── fit.py         the figure fitter loop            (runs Tectonic)
 ├── render.py      Document → IEEE LaTeX via Jinja2  (pure)
 ├── convert.py     .docx → LaTeX                     (runs pandoc)
 ├── compile.py     .tex → PDF                        (runs Tectonic)
@@ -184,7 +188,7 @@ prarup/
 ├── gui.py         the window
 ├── presets/ieee.yaml
 └── templates/ieee.tex.j2
-tests/             105 tests, fixtures in tests/fixtures/
+tests/             160 tests, fixtures in tests/fixtures/
 ```
 
 The proposal's nested packages (`ingest/`, `verify/`, `llm/` …) were never needed

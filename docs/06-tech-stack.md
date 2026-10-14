@@ -14,12 +14,13 @@ Everything is Python or invoked from Python. No web backend, no JavaScript, no s
 | **PDF inspection** | PyMuPDF | `page.get_fonts()` for the font checks, `doc.metadata` for encryption, `doc.get_toc()` for bookmarks, page count. One library covers every check we have. |
 | **DOCX import** | pandoc, called with `subprocess` | Mature, and turns Word equations into real LaTeX math. Called directly, so there is no wrapper library to version. |
 | **Font repair** | Ghostscript, called with `subprocess` | The standard tool for embedding referenced fonts. Its limits are documented in [11 · Compliance Rules](11-compliance-rules.md). |
+| **OCR** | Tesseract, called with `subprocess` | Reads the text inside bitmap figures, so the figure fitter knows its printed size. Optional. |
 | **Presets** | PyYAML | A conference's rules are a YAML file, so a new conference is data, not code. |
-| **Testing** | pytest, pytest-qt | 105 tests, the window included, run headless. |
+| **Testing** | pytest, pytest-qt | 160 tests, the window included, run headless. |
 | **Packaging** | Poetry | One lock file, so all three machines install the same versions. |
 
 Versions on the development Mac: PySide6 6.11, PyMuPDF 1.28, Jinja2 3.1,
-PyYAML 6.0, Tectonic 0.17, pandoc 3.10, Ghostscript 10.08, Python 3.13.
+PyYAML 6.0, Tectonic 0.17, pandoc 3.10, Ghostscript 10.08, Tesseract 5.5, Python 3.13.
 
 **Python 3.11 to 3.13 only.** PySide6 publishes no wheels for 3.14 yet.
 
