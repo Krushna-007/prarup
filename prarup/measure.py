@@ -17,7 +17,8 @@ from pathlib import Path
 
 import pymupdf
 
-from prarup.models import Geometry, Graphic, Measured
+from prarup.checks import read_geometry
+from prarup.models import Graphic, Measured
 
 BITMAP = {".png", ".jpg", ".jpeg"}
 EXTENSIONS = ["", ".pdf", ".png", ".jpg", ".jpeg"]
@@ -31,16 +32,6 @@ TAIL = set("gjpqy")
 # A point or two of rounding in LaTeX's own numbers is not an overflow;
 # right-column figures land about 1.2 pt left of where the gap predicts.
 TOLERANCE = 2.0
-
-
-def read_geometry(doc: pymupdf.Document) -> Geometry | None:
-    """The column and text widths LaTeX wrote into the document info."""
-    info = doc.xref_get_key(-1, "Info")
-    if info[0] != "xref":
-        return None
-    raw = doc.xref_get_key(int(info[1].split()[0]), "PrarupGeometry")[1]
-    numbers = [float(n) for n in re.findall(r"[\d.]+(?=pt)", raw)]
-    return Geometry(*numbers) if len(numbers) == 4 else None
 
 
 def graphic_boxes(doc: pymupdf.Document) -> dict:

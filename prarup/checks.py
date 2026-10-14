@@ -5,11 +5,12 @@ Issues back. Nothing here starts a process, opens a window or touches the
 network, which is what makes it easy to test.
 """
 
+import re
 from pathlib import Path
 
 import pymupdf
 
-from prarup.models import Issue, Rules
+from prarup.models import Geometry, Issue, Rules
 
 
 class UnreadablePdf(Exception):
@@ -163,6 +164,51 @@ def check_security(pdf_path: Path) -> list[Issue]:
     )]
 
 
+def read_geometry(doc: pymupdf.Document) -> Geometry | None:
+    """The column and text widths LaTeX wrote into the document info.
+
+    Present in every PDF Prarup builds from a .docx, and in the fitter's
+    measuring builds. Any other PDF has none.
+    """
+    info = doc.xref_get_key(-1, "Info")
+    if info[0] != "xref":
+        return None
+    raw = doc.xref_get_key(int(info[1].split()[0]), "PrarupGeometry")[1]
+    numbers = [float(n) for n in re.findall(r"[\d.]+(?=pt)", raw)]
+    return Geometry(*numbers) if len(numbers) == 4 else None
+
+
+def check_figure_overflow(pdf_path: Path) -> list[Issue]:
+    """Report images that run past their column into the next one.
+
+    A figure exported from Word keeps its size in inches, so a wide one
+    runs across the other column. A figure* centred over the whole text
+    block is wide on purpose and is not reported.
+    """
+    doc = _open(pdf_path)
+    geometry = read_geometry(doc)
+    issues = []
+    if geometry is not None:
+        centre = geometry.left + geometry.text / 2
+        for number, page in enumerate(doc, start=1):
+            for image in page.get_images():
+                for rect in page.get_image_rects(image[0]):
+                    spans_both = (abs((rect.x0 + rect.x1) / 2 - centre) < 2
+                                  and rect.width <= geometry.text + 2)
+                    low, high = geometry.bounds(rect.x0, spans_both)
+                    over = max(rect.x1 - high, low - rect.x0)
+                    if over > 2:
+                        issues.append(Issue(
+                            code="GEOM-02",
+                            message=(f"a figure on page {number} runs {over:.0f} pt past "
+                                     f"its column. Use Fit figures (prarup fit) to resize it"),
+                            severity="error",
+                            can_fix=False,
+                        ))
+    doc.close()
+    return issues
+
+
 def check_bookmarks(pdf_path: Path) -> list[Issue]:
     """Report a PDF outline (bookmarks), usually left by hyperref.
 
@@ -197,6 +243,7 @@ def run_all_checks(pdf_path: Path, rules: Rules) -> list[Issue]:
     issues += check_page_count(pdf_path, rules)
     issues += check_security(pdf_path)
     issues += check_bookmarks(pdf_path)
+    issues += check_figure_overflow(pdf_path)
 
     # errors before warnings, so the blocking items are read first
     issues.sort(key=lambda issue: issue.severity != "error")
