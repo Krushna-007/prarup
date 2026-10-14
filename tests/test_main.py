@@ -113,3 +113,26 @@ def test_build_reports_a_missing_source(monkeypatch, capsys, tmp_path):
                "--outdir", str(tmp_path))
     assert code == 2
     assert "does not exist" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(shutil.which("tectonic") is None, reason="tectonic not installed")
+def test_fit_reports_each_figure_and_writes_the_fitted_source(monkeypatch, capsys, tmp_path):
+    from test_measure import plot
+
+    plot(tmp_path / "fig.pdf", 4)
+    tex = tmp_path / "paper.tex"
+    tex.write_text(
+        "\\documentclass[conference]{IEEEtran}\n\\usepackage{graphicx}\n\\begin{document}\n"
+        "Text.\n\\begin{figure}\\centering\\includegraphics[width=5in]{fig.pdf}"
+        "\\caption{A}\\end{figure}\n\\end{document}\n"
+    )
+    code = run(monkeypatch, "fit", str(tex), "--outdir", str(tmp_path / "out"))
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "Fig. 1" in out and "past its column" in out
+    assert (tmp_path / "paper-fitted.tex").exists()
+
+
+def test_fit_refuses_a_pdf(monkeypatch, capsys):
+    assert run(monkeypatch, "fit", str(FIXTURES / "six_pages.pdf")) == 2
+    assert "needs the .docx or .tex" in capsys.readouterr().err
