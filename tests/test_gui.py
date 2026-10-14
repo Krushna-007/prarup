@@ -196,3 +196,36 @@ def test_unknown_template_falls_back_to_defaults(tmp_path, monkeypatch):
 
     monkeypatch.setattr(prarup.gui, "PRESETS", tmp_path)
     assert prarup.gui.rules_for("nothing") == Rules()
+
+
+# ---------------------------------------------------------------- fitting
+
+def test_fit_needs_a_source_not_a_finished_pdf(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.load(FIXTURES / "six_pages.pdf")
+    assert not window.fit_button.isEnabled()
+    window.load(FIXTURES / "sample.docx")
+    assert window.fit_button.isEnabled()
+
+
+@pytest.mark.skipif(shutil.which("tectonic") is None, reason="tectonic not installed")
+def test_fit_figures_shows_what_changed(qtbot, tmp_path):
+    from test_measure import plot
+
+    plot(tmp_path / "fig.pdf", 4)
+    tex = tmp_path / "paper.tex"
+    tex.write_text(
+        "\\documentclass[conference]{IEEEtran}\n\\usepackage{graphicx}\n\\begin{document}\n"
+        "Text.\n\\begin{figure}\\centering\\includegraphics[width=5in]{fig.pdf}"
+        "\\caption{A}\\end{figure}\n\\end{document}\n"
+    )
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.load(tex)
+    window.start_fit()
+
+    qtbot.waitUntil(lambda: window.fit_report.toPlainText() != "", timeout=60000)
+    qtbot.waitUntil(lambda: window.build_button.isEnabled(), timeout=10000)
+    assert "Fig. 1" in window.fit_report.toPlainText()
+    assert window.pdf_path.name == "paper-fitted.pdf"
