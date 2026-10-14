@@ -3,6 +3,7 @@
     prarup check paper.pdf           look at an existing PDF
     prarup build paper.tex           compile, then look at the result
     prarup build paper.docx          convert, compile, then look
+    prarup fit paper.docx            resize figures to fit, then look
 """
 
 import argparse
@@ -17,6 +18,7 @@ from prarup.convert import (
     docx_to_tex,
     find_custom_macros,
 )
+from prarup.fit import FitFailed, describe, fit_paper
 from prarup.fix import GhostscriptNotFound, RepairFailed, embed_fonts
 from prarup.document import document_from_latex
 from prarup.models import Author, Rules
@@ -37,6 +39,8 @@ def load_rules(args) -> Rules:
         rules = Rules()
     if args.page_limit is not None:
         rules.page_limit = args.page_limit
+    if getattr(args, "min_figure_text", None) is not None:
+        rules.min_figure_text_pt = args.min_figure_text
     return rules
 
 
@@ -105,6 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
     for name, help_text in [
         ("check", "check an existing PDF"),
         ("build", "convert and compile a manuscript, then check it"),
+        ("fit", "resize figures to fit their columns and the page limit, then check"),
     ]:
         p = sub.add_parser(name, help=help_text)
         p.add_argument("source", type=Path, help=".pdf, .tex or .docx")
@@ -113,7 +118,10 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--page-limit", type=int, help="override the page limit")
         p.add_argument("--fix", action="store_true",
                        help="repair what can be repaired, then re-check")
-        if name == "build":
+        if name == "fit":
+            p.add_argument("--min-figure-text", type=float, metavar="PT",
+                           help="smallest readable text inside a figure (default: preset)")
+        if name in ("build", "fit"):
             p.add_argument("--outdir", type=Path, default=Path("build"))
             p.add_argument("--template", default="ieee",
                            help="output template (default: ieee)")
@@ -144,8 +152,23 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
+    if args.command == "fit":
+        if suffix == ".pdf":
+            print("error: fit needs the .docx or .tex the PDF was built from",
+                  file=sys.stderr)
+            return 2
+        try:
+            report = fit_paper(prepare_tex(args.source, args.outdir, args),
+                               args.outdir, rules)
+        except (TectonicNotFound, PandocNotFound, ConversionFailed, FitFailed) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        print("\n".join(describe(report)))
+        print(f"\nfitted source -> {report.fitted_tex}\n")
+        pdf_path = report.pdf
+
     # building a PDF has nothing to build, so it is the same as checking it
-    if args.command == "check" or suffix == ".pdf":
+    elif args.command == "check" or suffix == ".pdf":
         pdf_path = args.source
     else:
         try:
