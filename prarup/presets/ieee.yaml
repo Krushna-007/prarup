@@ -2,3 +2,5 @@
 page_limit: 6
 columns: 2
 body_font_pt: 10.0
+# smallest printed text inside a figure; used by the figure fitter
+min_figure_text_pt: 7.0
