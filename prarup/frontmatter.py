@@ -58,42 +58,90 @@ def escape_latex(text: str) -> str:
     return text.replace("\x00", r"\textbackslash{}")
 
 
+_SUPERSCRIPTS = "¹²³⁴⁵⁶⁷⁸⁹⁰"
+_MARKER = re.compile(r"[" + _SUPERSCRIPTS + r"*†‡§‖]+|(?<=[a-zà-ÿ])\d+$")
+_LABEL = re.compile(r"(?i)^(authors?|author\(s\)|by)\s*:?$")
+_NAME_WORD = r"(?:[A-Z][a-zà-ÿ'’]+(?:-[A-Z][a-zà-ÿ'’]+)*|[A-Z]\.(?:[A-Z]\.)*)"
+
+
 def _looks_like_a_name(text: str) -> bool:
     words = text.split()
     if not 2 <= len(words) <= 4 or re.search(r"[\d@]", text):
         return False
     if any(w.lower().strip(",") in _ORGANISATION for w in words):
         return False
-    # "Asha", "Rao", "A." pass; "IIT" and "DA-IICT" do not
-    return all(re.fullmatch(r"[A-Z][a-z'’\-]+|[A-Z]\.", w) for w in words)
+    # "Asha", "Rao", "A.", "Jean-Luc" pass; "IIT" and "DA-IICT" do not
+    return all(re.fullmatch(_NAME_WORD, w) for w in words)
+
+
+def _split_marks(text: str) -> tuple[str, set]:
+    """"Kayeleigh Sharp¹" -> ("Kayeleigh Sharp", {"1"})."""
+    marks = set()
+    for m in _MARKER.finditer(text):
+        for char in m.group():
+            marks.add(str(_SUPERSCRIPTS.index(char) + 1 if char in _SUPERSCRIPTS[:9]
+                          else 0 if char == "⁰" else char))
+    return _clean_name(_MARKER.sub("", text)), marks
 
 
 def _clean_name(text: str) -> str:
     text = re.sub(r"^\d+(st|nd|rd|th)\s+", "", text.strip())   # "1st Given Name"
-    return text.strip(" ,*†‡0123456789")
+    return text.strip(" ,*†‡§‖0123456789" + _SUPERSCRIPTS)
 
 
 def read_authors(paragraphs: list[str]) -> list[Author]:
-    """Read one or more authors from each paragraph between title and abstract."""
-    authors = []
+    """Read authors and affiliations from the paragraphs between title and abstract.
+
+    Handles one author per line or several per line ("A, B and C"),
+    "Name, Affiliation", blocks of name then affiliation lines, "Email:"
+    lines, a leading "Author(s):" label, and numbered affiliations tied
+    to authors by superscript markers (Rao¹ ... ¹ DA-IICT).
+    """
+    authors, group, marks = [], [], {}
+
+    def attach(text: str, to: list) -> None:
+        for author in to:
+            author.affiliation = ", ".join(p for p in (author.affiliation, text) if p)
+
     for paragraph in paragraphs:
-        lines = paragraph.split("\n")
-        if len(lines) > 1:
-            authors.append(Author(_clean_name(lines[0]), ", ".join(lines[1:])))
-            continue
-        line = lines[0]
-        names = [_clean_name(n) for n in re.split(r",\s*|\s+and\s+", line) if n.strip()]
-        if len(names) > 1 and all(_looks_like_a_name(n) for n in names):
-            authors += [Author(n) for n in names]
-        elif "," in line:
-            name, affiliation = line.split(",", 1)
-            authors.append(Author(_clean_name(name), affiliation.strip()))
-        elif _looks_like_a_name(_clean_name(line)) or not authors:
-            authors.append(Author(_clean_name(line)))
-        else:                       # a stray affiliation line belongs to the last author
-            last = authors[-1]
-            last.affiliation = ", ".join(p for p in (last.affiliation, line) if p)
+        for number, line in enumerate(l.strip() for l in paragraph.split("\n")):
+            if not line or _LABEL.match(line):
+                continue
+            marked = re.match(r"^([" + _SUPERSCRIPTS + r"*†‡§‖]+|\d+)\s*(\S.*)$", line)
+            parts = [p for p in re.split(r",\s*|\s+and\s+|\s*&\s*", line) if p.strip()]
+            names = [_split_marks(p) for p in parts]
+
+            if marked and marks and marked.group(1) not in ("",):
+                key = (str(_SUPERSCRIPTS.index(marked.group(1)[0]) + 1)
+                       if marked.group(1)[0] in _SUPERSCRIPTS[:9] else marked.group(1))
+                attach(marked.group(2), [a for a in authors if key in marks.get(id(a), set())])
+            elif "@" in line or line.lower().startswith(("email", "e-mail")):
+                attach(line, group or authors[-1:])
+            elif len(names) > 1 and all(_looks_like_a_name(n) for n, _ in names):
+                group = [Author(n) for n, _ in names]
+                for author, (_, m) in zip(group, names):
+                    marks[id(author)] = m
+                authors += group
+            elif _looks_like_a_name(names[0][0]) and (len(parts) == 1 or number == 0):
+                author = Author(names[0][0], ", ".join(parts[1:]) if number == 0 else "")
+                marks[id(author)] = names[0][1]
+                group = [author]
+                authors.append(author)
+            elif not authors:
+                group = [Author(_clean_name(line))]
+                authors += group
+            else:                       # an affiliation line for the current group
+                attach(line, group or authors[-1:])
     return authors
+
+
+def title_and_authors(paragraphs: list[str]) -> tuple[str, list[Author]]:
+    """The first paragraph is the title; the rest are authors and affiliations."""
+    paragraphs = [p for p in paragraphs if p.strip()]
+    if not paragraphs:
+        return "", []
+    title = " ".join(paragraphs[0].split()).strip("\"“”'")
+    return title, read_authors(paragraphs[1:])
 
 
 def split_front_matter(fragment: str) -> tuple[dict, str]:

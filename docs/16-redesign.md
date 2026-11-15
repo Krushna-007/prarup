@@ -87,7 +87,7 @@ flowchart TD
     C -->|"all clear"| X["Export bundle<br/>PDF · .tex · figures · report"]
 ```
 
-### The main screen
+### The main window (PySide6)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────┐
@@ -114,6 +114,10 @@ flowchart TD
 
 ## 5 · Architecture
 
+**A desktop application, built with PySide6.** A desktop GUI is a required
+part of the PC503 project, and running locally is also what keeps an
+unpublished manuscript on the author's machine.
+
 One Python process, organised as services with narrow interfaces. Separate
 processes (true microservices) would add deployment work and buy nothing for a
 single-user tool; the boundaries below are where they would split if it ever
@@ -121,12 +125,12 @@ became a hosted service.
 
 ```mermaid
 flowchart LR
-    subgraph UI["UI"]
-        W["Paper view · editor · panels · preview"]
+    subgraph UI["PySide6 desktop window"]
+        W["Outline (tags) · editor · preview (QPdfView)<br/>Missing · Images · Checks · Fit panels"]
     end
 
-    subgraph API["API layer"]
-        R["routes: upload · paper · edit · build · fit · export"]
+    subgraph API["Controller (Qt workers, off the UI thread)"]
+        R["open · edit · build · fit · export"]
     end
 
     subgraph CORE["Core services (pure where possible)"]
@@ -265,7 +269,7 @@ says how strong each is.
 |---|---|---|---|
 | 1 · Declared provenance | **C2PA Content Credentials** manifest naming a generative tool or `c2pa.ai-disclosure`; IPTC `DigitalSourceType = trainedAlgorithmicMedia` in XMP | Decisive when present | `c2pa-python` to read and validate manifests; XMP read from the file |
 | 2 · Tool fingerprints | PNG text chunks written by generators: Stable Diffusion (`parameters`), ComfyUI (`prompt`, `workflow`), Midjourney / DALL·E / Firefly in EXIF `Software` or XMP `CreatorTool` | Strong when present, easy to strip | PNG chunks and EXIF via Pillow |
-| 3 · Classifier | A pretrained AI-vs-real image classifier, run locally | **Probabilistic.** Trained mostly on photos and art, not scientific figures; shown as a likelihood with that warning, never as a verdict | Optional extra (`poetry install --with ai`), e.g. `Ateeqq/ai-vs-human-image-detector` (Apache-2.0) |
+| 3 · Classifier | A pretrained AI-vs-real image classifier, run locally | **Probabilistic.** Trained mostly on photos and art, not scientific figures; shown as a likelihood with that warning, never as a verdict | Optional install (`poetry install --with ai`, decided 2026-11-15), e.g. `Ateeqq/ai-vs-human-image-detector` (Apache-2.0) |
 
 Absence of layers 1 and 2 proves nothing: metadata is stripped by screenshots
 and by Word itself. The report says so.
@@ -305,9 +309,10 @@ checked. Screenshots go in the report.
    `\texorpdfstring`, figures, tables)
 3. Analyzer: missingness
 4. Image forensics: dpi, AI layers 1 and 2, duplicates; classifier as an extra
-5. Fitter policy fix: never push a paper over its page limit for readability
-   without saying so and offering the trade-off
-6. UI: paper view, editor, panels, preview
+5. Fitter policy: when readability and the page limit conflict, show both
+   layouts ("readable, 8 pages" / "within 6 pages, Fig. 3 text 4.6 pt") and let
+   the user pick
+6. Desktop UI (PySide6): outline with tags, editor, panels, preview, styled
 7. Export bundle
 8. The messy-paper test plan, end to end through the UI
 

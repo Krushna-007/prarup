@@ -4,20 +4,46 @@
 
 \usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
-\usepackage{algorithmic}
 \usepackage{graphicx}
 \usepackage{textcomp}
 \usepackage{xcolor}
-\usepackage{longtable,booktabs,array}
+\usepackage{booktabs,array,tabularx,adjustbox}
 \usepackage{url}
 
-%% pandoc emits \tightlist for compact lists; IEEEtran does not define it
+%% What pandoc's LaTeX expects and IEEEtran does not provide.
 \providecommand{\tightlist}{%
   \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+%% hyperref is left out on purpose (it adds PDF bookmarks, see DOC-02),
+%% so its commands just print their text.
+\providecommand{\texorpdfstring}[2]{#1}
+\providecommand{\href}[2]{#2}
+%% pandoc writes a reference it could not resolve as \hyperref[label]{[label]}
+\providecommand{\hyperref}[2][]{\ref{#1}}
+\providecommand{\phantomsection}{}
+\providecommand{\ul}[1]{\underline{#1}}
+\providecommand{\st}[1]{#1}
+%% right-to-left marks copied from Word come through as \RL and \LR
+\providecommand{\RL}[1]{#1}
+\providecommand{\LR}[1]{#1}
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{%
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}\fi}
+\makeatother
 
 %% Records the column and text widths in the PDF's document info, so
 %% Prarup can tell when a figure runs past its column. Changes nothing visible.
 \AtBeginDocument{\special{pdf:docinfo << /PrarupGeometry (\the\columnwidth\space\the\textwidth\space\the\dimexpr1in+\hoffset+\oddsidemargin\relax\space\the\columnsep) >>}}
+\BLOCK{ if doc.preamble }
+
+%% From the author's own preamble: maths packages and macro definitions
+\VAR{ doc.preamble }
+\BLOCK{ endif }
 
 \begin{document}
 

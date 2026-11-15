@@ -1,0 +1,47 @@
+% A small paper written the way real arXiv submissions are: for pdfLaTeX,
+% split over files, with its own macros and a hand-written bibliography.
+% Every construct here broke an earlier Prarup on a real paper.
+\documentclass[conference]{IEEEtran}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath,amssymb}
+\usepackage{dsfont}
+\usepackage{graphicx}
+\newcommand{\E}{\mathds{E}}
+\newcommand{\vect}[1]{\mathbf{#1}}
+\begin{document}
+\title{Federated Learning on Drone Swarms}
+\author{\IEEEauthorblockN{Asha Rao$^{(1)}$, Vikram Shah$^{(2)}$ and Om Patel$^{(1)}$}
+\IEEEauthorblockA{$^{(1)}$DA-IICT, Gandhinagar, India \\
+$^{(2)}$IIT Bombay, Mumbai, India}}
+\maketitle
+\begin{abstract}
+We study federated learning on UAV swarms and show a 12\% gain.
+\end{abstract}
+\begin{IEEEkeywords}
+federated learning, UAV
+\end{IEEEkeywords}
+\input{sections/intro}
+\section{Results}
+The expected loss is bounded as follows
+\[\label{eq:bound}
+\begin{align}
+\E[\ell] &\le \sum_k \vect{w}_k \label{eq:first} \\
+&= 1
+\end{align}\]
+where $\vect{w}$ are the weights, as shown in Fig.~\ref{fig:acc}.
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.9\columnwidth]{figs/Accuracy}
+\caption{Accuracy over rounds.}
+\label{fig:acc}
+\end{figure}
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\columnwidth]{figs/missing_plot}
+\caption{A figure whose image was never added.}
+\end{figure}
+\begin{thebibliography}{1}
+\bibitem{mcmahan} B. McMahan \emph{et al.}, ``Communication-efficient learning,'' in \emph{AISTATS}, 2017.
+\bibitem{unused} A. Nobody, ``A reference nobody cites,'' 2020.
+\end{thebibliography}
+\end{document}
