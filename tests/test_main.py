@@ -101,38 +101,77 @@ def test_a_corrupt_pdf_exits_two_without_a_traceback(monkeypatch, capsys, tmp_pa
 
 
 def test_build_refuses_an_unsupported_file_type(monkeypatch, capsys, tmp_path):
-    """A .txt would otherwise reach Tectonic and fail with a TeX error."""
+    """A .txt would otherwise reach pandoc or Tectonic and fail obscurely."""
     notes = tmp_path / "notes.txt"
     notes.write_text("hello")
-    assert run(monkeypatch, "build", str(notes), "--outdir", str(tmp_path)) == 2
-    assert ".docx, .tex or .pdf" in capsys.readouterr().err
+    assert run(monkeypatch, "build", str(notes)) == 2
+    assert ".docx, .tex or .zip" in capsys.readouterr().err
 
 
 def test_build_reports_a_missing_source(monkeypatch, capsys, tmp_path):
-    code = run(monkeypatch, "build", str(tmp_path / "gone.tex"),
-               "--outdir", str(tmp_path))
-    assert code == 2
+    assert run(monkeypatch, "build", str(tmp_path / "gone.tex")) == 2
     assert "does not exist" in capsys.readouterr().err
 
 
-@pytest.mark.skipif(shutil.which("tectonic") is None, reason="tectonic not installed")
-def test_fit_reports_each_figure_and_writes_the_fitted_source(monkeypatch, capsys, tmp_path):
-    from test_measure import plot
+needs_tools = pytest.mark.skipif(
+    shutil.which("tectonic") is None or shutil.which("pandoc") is None,
+    reason="tectonic and pandoc needed")
+REAL = FIXTURES / "real"
 
-    plot(tmp_path / "fig.pdf", 4)
-    tex = tmp_path / "paper.tex"
-    tex.write_text(
-        "\\documentclass[conference]{IEEEtran}\n\\usepackage{graphicx}\n\\begin{document}\n"
-        "Text.\n\\begin{figure}\\centering\\includegraphics[width=5in]{fig.pdf}"
-        "\\caption{A}\\end{figure}\n\\end{document}\n"
-    )
-    code = run(monkeypatch, "fit", str(tex), "--outdir", str(tmp_path / "out"))
+
+@needs_tools
+def test_inspect_lists_what_a_real_paper_is_missing(monkeypatch, capsys, tmp_path):
+    paper = tmp_path / "svm.docx"
+    shutil.copy(REAL / "svm_diabetes.docx", paper)
+    code = run(monkeypatch, "inspect", str(paper))
     out = capsys.readouterr().out
-    assert code == 0
-    assert "Fig. 1" in out and "past its column" in out
-    assert (tmp_path / "paper-fitted.tex").exists()
+    assert code == 1                                   # Fig. 1 has no image: an error
+    assert "FIG-03  Fig. 1 has a caption but no image." in out
+    assert "dpi" in out
+
+
+@needs_tools
+def test_build_a_real_word_paper(monkeypatch, capsys, tmp_path):
+    paper = tmp_path / "svm.docx"
+    shutil.copy(REAL / "svm_diabetes.docx", paper)
+    run(monkeypatch, "build", str(paper))
+    out = capsys.readouterr().out
+    assert "built ->" in out
+    assert (tmp_path / "svm-prarup" / "build" / "paper.pdf").exists()
+    assert "GEOM-03" in out                            # Fig. 3 prints at 3.9 pt
+
+
+@needs_tools
+def test_fit_then_the_figure_is_readable(monkeypatch, capsys, tmp_path):
+    paper = tmp_path / "svm.docx"
+    shutil.copy(REAL / "svm_diabetes.docx", paper)
+    run(monkeypatch, "fit", str(paper))
+    out = capsys.readouterr().out
+    assert "Fig. 3" in out and "text 7.0 pt" in out
+    assert "GEOM-03" not in out.split("built ->")[1]
+
+
+@needs_tools
+def test_typed_metadata_with_latex_special_characters(monkeypatch, capsys, tmp_path):
+    """Typed "12%" once started a LaTeX comment and cut the abstract short."""
+    import pymupdf
+    paper = tmp_path / "svm.docx"
+    shutil.copy(REAL / "svm_diabetes.docx", paper)
+    run(monkeypatch, "build", str(paper), "--title", "R&D at 100% of R_2",
+        "--abstract", "We show a 12% gain & R_2 improves.")
+    text = " ".join(pymupdf.open(tmp_path / "svm-prarup" / "build" / "paper.pdf")[0].get_text().split())
+    assert "R&D at 100% of R_2" in text
+    assert "We show a 12% gain & R_2 improves." in text
+
+
+@needs_tools
+def test_export_writes_a_zip(monkeypatch, capsys, tmp_path):
+    paper = tmp_path / "svm.docx"
+    shutil.copy(REAL / "svm_diabetes.docx", paper)
+    assert run(monkeypatch, "export", str(paper), "-o", str(tmp_path / "out.zip")) == 0
+    assert (tmp_path / "out.zip").exists()
 
 
 def test_fit_refuses_a_pdf(monkeypatch, capsys):
     assert run(monkeypatch, "fit", str(FIXTURES / "six_pages.pdf")) == 2
-    assert "needs the .docx or .tex" in capsys.readouterr().err
+    assert "needs the .docx, .tex or .zip" in capsys.readouterr().err

@@ -1,25 +1,14 @@
-"""Find the title, authors and abstract in a Word paper's LaTeX.
+"""Authors, affiliations and plain text, for the front matter of a paper.
 
-A Word file rarely marks these with styles pandoc understands. Usually
-they are ordinary paragraphs above the first heading, so pandoc puts them
-in the body, where they would print as plain text. This file recognises
-them and takes them out.
-
-The anchor is the abstract. A paragraph starting "Abstract" is
-unmistakable; everything above it is the title and then the authors.
-Without one, nothing is taken, because a first paragraph could just as
-well be the paper's opening text.
-
-Pure string work: no files, no processes.
+ingest.py finds where the title, authors and abstract are; this file reads
+them: authors in the layouts real papers use, and LaTeX turned into
+readable text. Pure string work: no files, no processes.
 """
 
 import re
 
 from prarup.models import Author
 
-_ABSTRACT = re.compile(r"(?is)^abstract\b[\s—–:.\-]*(?P<rest>.*)$")
-_KEYWORDS = re.compile(r"(?is)^(?:keywords|key words|index terms)\b[\s—–:.\-]*(?P<rest>.*)$")
-_SECTION = re.compile(r"\\section\*?\{")
 
 # Words that mark a line as an affiliation rather than a person's name
 _ORGANISATION = {
@@ -47,15 +36,6 @@ def latex_to_plain(latex: str) -> str:
     text = text.replace("---", "—").replace("--", "–")
     lines = [" ".join(part.split()) for part in text.split("\x00")]
     return "\n".join(line for line in lines if line)
-
-
-def escape_latex(text: str) -> str:
-    """Plain text made safe to put in LaTeX. A bare % would start a comment."""
-    text = text.replace("\\", "\x00")
-    for char in "&%$#_{}":
-        text = text.replace(char, "\\" + char)
-    text = text.replace("~", r"\textasciitilde{}").replace("^", r"\textasciicircum{}")
-    return text.replace("\x00", r"\textbackslash{}")
 
 
 _SUPERSCRIPTS = "¹²³⁴⁵⁶⁷⁸⁹⁰"
@@ -142,38 +122,3 @@ def title_and_authors(paragraphs: list[str]) -> tuple[str, list[Author]]:
         return "", []
     title = " ".join(paragraphs[0].split()).strip("\"“”'")
     return title, read_authors(paragraphs[1:])
-
-
-def split_front_matter(fragment: str) -> tuple[dict, str]:
-    """({title, authors, abstract, keywords}, body without them).
-
-    Returns ({}, fragment) unchanged when no abstract is found.
-    """
-    section = _SECTION.search(fragment)
-    cut = section.start() if section else len(fragment)
-    paragraphs = [p for p in re.split(r"\n\s*\n", fragment[:cut]) if p.strip()]
-    plain = [latex_to_plain(p) for p in paragraphs]
-
-    where = next((i for i, p in enumerate(plain) if _ABSTRACT.match(p)), None)
-    if where is None:
-        return {}, fragment
-
-    abstract = _ABSTRACT.match(plain[where]).group("rest").strip()
-    used = where + 1
-    if not abstract and used < len(plain):          # "Abstract" alone, text below it
-        abstract = plain[used].replace("\n", " ")
-        used += 1
-
-    keywords = ""
-    if used < len(plain) and _KEYWORDS.match(plain[used]):
-        keywords = _KEYWORDS.match(plain[used]).group("rest").replace("\n", " ").strip()
-        used += 1
-
-    found = {
-        "title": plain[0].replace("\n", " ") if where > 0 else "",
-        "authors": read_authors(plain[1:where]),
-        "abstract": " ".join(abstract.split()),
-        "keywords": keywords,
-    }
-    rest = "\n\n".join(paragraphs[used:])
-    return found, (rest + "\n\n" if rest else "") + fragment[cut:]

@@ -69,71 +69,37 @@ needs_pandoc = pytest.mark.skipif(
 
 @needs_tectonic
 @needs_pandoc
-def test_docx_becomes_a_compliant_ieee_paper(tmp_path):
-    """The full pipeline: .docx in, checked IEEE PDF out."""
-    from prarup.checks import run_all_checks
-    from prarup.convert import docx_to_tex
-    from prarup.document import document_from_latex
-    from prarup.models import Author, Rules
-    from prarup.render import render
-
-    fragment = docx_to_tex(FIXTURES / "sample.docx", tmp_path, standalone=False)
-    document = document_from_latex(
-        fragment.read_text(),
-        authors=[Author("Krushna Parmar", "DA-IICT")],
-        abstract="A short abstract.",
-    )
-
-    tex_path = tmp_path / "out.tex"
-    tex_path.write_text(render(document))
-    pdf, log = compile_pdf(tex_path, tmp_path)
-
-    assert pdf.exists(), f"compilation failed:\n{log}"
-    assert run_all_checks(pdf, Rules()) == []
-
-    import pymupdf
-    text = pymupdf.open(pdf)[0].get_text()
-    # the abstract must precede the body, not be pushed down by a float
-    assert text.index("Abstract") < text.index("Introduction")
-    assert "Krushna Parmar" in text
-
-
-@pytest.mark.skipif(shutil.which("pandoc") is None or shutil.which("tectonic") is None,
-                    reason="pandoc and tectonic needed")
-def test_a_word_figure_wider_than_the_column_fails_the_build_and_fit_repairs_it(tmp_path):
-    """The whole story: Word keeps the figure at 5.8 in, the IEEE column is
-    3.5 in, Build reports the overlap, and Fit figures removes it."""
-    import subprocess
-
-    from prarup.gui import build_paper, fit_figures
+def test_the_demo_paper_goes_from_unreadable_to_readable(tmp_path):
+    """The demo: a Word figure 8 in wide squeezed into one column prints its
+    10 pt labels at about 4 pt. Build says so; Fit figures fixes it."""
     from prarup.models import Rules
-    from test_measure import plot
+    from prarup.project import Project
 
-    plot(tmp_path / "wide.png", 8)
-    (tmp_path / "paper.md").write_text(
-        "# Introduction\n\nSome text.\n\n![Accuracy](wide.png){width=5.8in}\n\n# Results\n\nMore.\n"
-    )
-    subprocess.run(["pandoc", "paper.md", "-o", "paper.docx"], cwd=tmp_path, check=True)
+    demo = tmp_path / "demo_paper.docx"
+    shutil.copy(FIXTURES / "demo_paper.docx", demo)
+    project = Project.open(demo)
+    assert project.m.title == "Federated Learning on Drone Swarms"
+    assert [a.name for a in project.m.authors] == ["Prateek Kalal", "Om Patel", "Krushna Parmar"]
 
-    _, issues = build_paper(tmp_path / "paper.docx", tmp_path / "build", "ieee", Rules())
-    assert "GEOM-02" in [i.code for i in issues]
+    before = project.build(Rules())
+    assert [i.code for i in before.issues] == ["GEOM-03"]
 
-    report, issues = fit_figures(tmp_path / "paper.docx", tmp_path / "fit", "ieee", Rules())
-    assert "GEOM-02" not in [i.code for i in issues]
-    assert report.changes[0].double_after is True
-
-
-@pytest.mark.skipif(shutil.which("pandoc") is None or shutil.which("tectonic") is None,
-                    reason="pandoc and tectonic needed")
-def test_the_demo_paper_goes_red_then_green(tmp_path):
-    """The exact demo: open, build (overlap found), fit (overlap gone)."""
-    from prarup.gui import build_paper, fit_figures
-    from prarup.models import Rules
-
-    demo = FIXTURES / "demo_paper.docx"
-    _, issues = build_paper(demo, tmp_path / "build", "ieee", Rules())
-    assert [i.code for i in issues] == ["GEOM-02"]
-
-    report, issues = fit_figures(demo, tmp_path / "fit", "ieee", Rules())
-    assert issues == []
+    [report] = project.fit(Rules())
+    project.apply_fit(report)
+    after = project.build(Rules())
+    assert after.issues == []
     assert report.changes[0].text_after >= 7
+
+
+@needs_tectonic
+@needs_pandoc
+def test_the_abstract_comes_before_the_body(tmp_path):
+    import pymupdf
+    from prarup.models import Rules
+    from prarup.project import Project
+
+    demo = tmp_path / "demo_paper.docx"
+    shutil.copy(FIXTURES / "demo_paper.docx", demo)
+    result = Project.open(demo).build(Rules())
+    text = pymupdf.open(result.pdf)[0].get_text()
+    assert text.index("Abstract") < text.index("Introduction")

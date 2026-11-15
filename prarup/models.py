@@ -153,6 +153,7 @@ class FigureChange:
     text_before: float | None    # printed size of the small text, points
     text_after: float | None
     note: str = ""               # why it was left alone, or what to do
+    name: str = ""               # how the report names it, e.g. "Fig. 3"; default "Fig. <index>"
 
 
 @dataclass

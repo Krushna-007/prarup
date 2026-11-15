@@ -1,9 +1,13 @@
 """Command line entry point.
 
-    prarup check paper.pdf           look at an existing PDF
-    prarup build paper.tex           compile, then look at the result
-    prarup build paper.docx          convert, compile, then look
-    prarup fit paper.docx            resize figures to fit, then look
+    prarup inspect paper.docx        what is missing, and every image checked
+    prarup build paper.docx          build the IEEE PDF and check it
+    prarup fit paper.tex             fit figures to columns and the page limit
+    prarup export paper.docx         submission zip: PDF, LaTeX, images, report
+    prarup check paper.pdf [--fix]   check (and repair) a finished PDF
+
+A paper may be .docx, .tex or a .zip of a LaTeX project. Its working folder
+<name>-prarup/ sits beside it and keeps any edits made in the window.
 """
 
 import argparse
@@ -11,31 +15,25 @@ import sys
 from pathlib import Path
 
 from prarup.checks import UnreadablePdf, run_all_checks
-from prarup.compile import TectonicNotFound, compile_pdf
-from prarup.convert import (
-    ConversionFailed,
-    PandocNotFound,
-    docx_to_document,
-    find_custom_macros,
-)
-from prarup.fit import FitFailed, describe, fit_paper
+from prarup.compile import TectonicNotFound
+from prarup.fit import FitFailed, describe
 from prarup.fix import GhostscriptNotFound, RepairFailed, embed_fonts
+from prarup.ingest import OpenFailed
 from prarup.models import Author, Rules
-from prarup.render import render
+from prarup.pandoc import PandocFailed, PandocNotFound
+from prarup.project import Project
 
 PRESETS = Path(__file__).parent / "presets"
-SOURCE_TYPES = {".docx", ".tex", ".pdf"}
+PAPERS = {".docx", ".tex", ".zip"}
 
 
 def load_rules(args) -> Rules:
     """Rules come from a named preset, an explicit file, or the defaults."""
     if args.rules:
-        return Rules.load(args.rules)
-    preset = PRESETS / f"{args.preset}.yaml"
-    if preset.exists():
-        rules = Rules.load(preset)
+        rules = Rules.load(args.rules)
     else:
-        rules = Rules()
+        preset = PRESETS / f"{args.preset}.yaml"
+        rules = Rules.load(preset) if preset.exists() else Rules()
     if args.page_limit is not None:
         rules.page_limit = args.page_limit
     if getattr(args, "min_figure_text", None) is not None:
@@ -52,178 +50,156 @@ def parse_authors(values: list[str] | None) -> list[Author]:
     return authors
 
 
-def describe_found(found: dict, args) -> str:
-    """One line saying what was read from the Word file, and what was typed."""
-    parts = []
-    for label, key, typed in [("title", "title", args.title),
-                              ("authors", "authors", args.author),
-                              ("abstract", "abstract", args.abstract)]:
-        if typed:
-            parts.append(f"{label} from the command line")
-        elif found.get(key):
-            value = found[key]
-            shown = f"{len(value)} found" if isinstance(value, list) else "found"
-            parts.append(f"{label} {shown}")
-        else:
-            parts.append(f"no {label} found")
-    return "Word file: " + ", ".join(parts)
-
-
-def prepare_tex(source: Path, out_dir: Path, args) -> Path:
-    """Return a .tex path ready to compile.
-
-    A .docx becomes a body fragment, is wrapped in the target template,
-    and is written back out. A .tex is compiled as it stands, because we
-    have no reliable way to separate an author's preamble from their body.
-    """
-    if source.suffix.lower() != ".docx":
-        return source
-
-    document, found = docx_to_document(
-        source, out_dir,
-        title=args.title or "",
-        authors=parse_authors(args.author),
-        abstract=args.abstract or "",
-    )
-
-    macros = find_custom_macros(document.body)
-    if macros:
-        print(
-            "warning: custom macros may not have survived conversion: "
-            + ", ".join(sorted(set(macros))),
-            file=sys.stderr,
-        )
-    print(describe_found(found, args), file=sys.stderr)
-
-    tex_path = out_dir / (source.stem + ".tex")
-    tex_path.write_text(render(document, template=args.template))
-    return tex_path
-
-
 def print_report(issues, pdf_path: Path) -> None:
-    """Print the findings in a form that reads top down."""
+    """Print PDF findings in a form that reads top down."""
     if not issues:
         print(f"{pdf_path.name}: all checks passed.")
         return
-
     errors = sum(1 for i in issues if i.severity == "error")
     warnings = len(issues) - errors
     print(f"{pdf_path.name}: {errors} error(s), {warnings} warning(s)\n")
-
     for issue in issues:
         label = "ERROR" if issue.severity == "error" else "WARN "
         suffix = "   [can fix automatically]" if issue.can_fix else ""
         print(f"  {label}  {issue.code}  {issue.message}{suffix}")
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="prarup", description=__doc__)
-    sub = parser.add_subparsers(dest="command", required=True)
+def print_findings(findings: list) -> None:
+    for title, items in [("Missing or wrong", [f for f in findings if f.group != "Images"]),
+                         ("Images", [f for f in findings if f.group == "Images"])]:
+        print(f"{title}: {len(items) or 'nothing'}")
+        for f in sorted(items, key=lambda f: f.severity != "error"):
+            print(f"  {'ERROR' if f.severity == 'error' else 'WARN '}  {f.code}  {f.message}")
+        print()
 
-    for name, help_text in [
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="prarup", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = parser.add_subparsers(dest="command", required=True)
+    commands = [
+        ("inspect", "list what is missing and check every image"),
+        ("build", "build the IEEE PDF and check it"),
+        ("fit", "fit figures to their columns and the page limit, then build"),
+        ("export", "write a submission zip"),
         ("check", "check an existing PDF"),
-        ("build", "convert and compile a manuscript, then check it"),
-        ("fit", "resize figures to fit their columns and the page limit, then check"),
-    ]:
+    ]
+    for name, help_text in commands:
         p = sub.add_parser(name, help=help_text)
-        p.add_argument("source", type=Path, help=".pdf, .tex or .docx")
+        p.add_argument("source", type=Path, help=".docx, .tex, .zip, or .pdf for check")
         p.add_argument("--preset", default="ieee", help="preset name (default: ieee)")
         p.add_argument("--rules", type=Path, help="path to a rules YAML file")
         p.add_argument("--page-limit", type=int, help="override the page limit")
-        p.add_argument("--fix", action="store_true",
-                       help="repair what can be repaired, then re-check")
+        if name in ("check", "build"):
+            p.add_argument("--fix", action="store_true", help="repair fonts, then re-check")
+        if name != "check":
+            p.add_argument("--fresh", action="store_true",
+                           help="read the paper again, dropping edits saved by the window")
+            p.add_argument("--title", help="set the paper title")
+            p.add_argument("--author", action="append", metavar="NAME:AFFILIATION",
+                           help="set the authors (repeat for each)")
+            p.add_argument("--abstract", help="set the abstract")
+        if name == "inspect":
+            p.add_argument("--classify", action="store_true",
+                           help="also run the AI-image classifier (poetry install --with ai)")
         if name == "fit":
             p.add_argument("--min-figure-text", type=float, metavar="PT",
                            help="smallest readable text inside a figure (default: preset)")
-        if name in ("build", "fit"):
-            p.add_argument("--outdir", type=Path, default=Path("build"))
-            p.add_argument("--template", default="ieee",
-                           help="output template (default: ieee)")
-            p.add_argument("--title", help="paper title (default: first heading)")
-            p.add_argument("--author", action="append", metavar="NAME:AFFILIATION",
-                           help="repeat for each author")
-            p.add_argument("--abstract", help="abstract text")
-
+            p.add_argument("--policy", choices=["readable", "limit"], default="readable",
+                           help="when readable figures break the page limit, which wins")
+        if name == "export":
+            p.add_argument("-o", "--output", type=Path, help="zip to write")
     return parser
+
+
+def _check(pdf: Path, rules: Rules, fix: bool) -> int:
+    try:
+        issues = run_all_checks(pdf, rules)
+    except UnreadablePdf as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if fix and any(i.can_fix for i in issues):
+        fixed = pdf.with_name(pdf.stem + "-fixed.pdf")
+        try:
+            embed_fonts(pdf, fixed)
+        except (GhostscriptNotFound, RepairFailed) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        # Ghostscript exits zero on files it did not change: only a fresh check proves a repair
+        issues = run_all_checks(fixed, rules)
+        print(f"repaired -> {fixed}\n")
+        pdf = fixed
+    print_report(issues, pdf)
+    return 1 if any(i.severity == "error" for i in issues) else 0
 
 
 def main() -> int:
     args = build_parser().parse_args()
-
     try:
         rules = load_rules(args)
     except (ValueError, FileNotFoundError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    if not args.source.exists():
-        print(f"error: {args.source} does not exist", file=sys.stderr)
+    source = args.source
+    if not source.exists():
+        print(f"error: {source} does not exist", file=sys.stderr)
         return 2
-
-    suffix = args.source.suffix.lower()
-    if suffix not in SOURCE_TYPES:
-        print(f"error: {args.source.name} is not a .docx, .tex or .pdf file",
+    suffix = source.suffix.lower()
+    if args.command == "check" or (args.command == "build" and suffix == ".pdf"):
+        return _check(source, rules, args.fix)
+    if suffix == ".pdf":
+        print(f"error: {args.command} needs the .docx, .tex or .zip the PDF was built from",
               file=sys.stderr)
         return 2
-
-    if args.command == "fit":
-        if suffix == ".pdf":
-            print("error: fit needs the .docx or .tex the PDF was built from",
-                  file=sys.stderr)
-            return 2
-        try:
-            report = fit_paper(prepare_tex(args.source, args.outdir, args),
-                               args.outdir, rules)
-        except (TectonicNotFound, PandocNotFound, ConversionFailed, FitFailed) as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return 2
-        print("\n".join(describe(report)))
-        print(f"\nfitted source -> {report.fitted_tex}\n")
-        pdf_path = report.pdf
-
-    # building a PDF has nothing to build, so it is the same as checking it
-    elif args.command == "check" or suffix == ".pdf":
-        pdf_path = args.source
-    else:
-        try:
-            tex_path = prepare_tex(args.source, args.outdir, args)
-            pdf_path, log = compile_pdf(tex_path, args.outdir)
-        except (TectonicNotFound, PandocNotFound, ConversionFailed) as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return 2
-        if not pdf_path.exists():
-            print("error: compilation failed\n", file=sys.stderr)
-            print(log, file=sys.stderr)
-            return 2
-
-    if not pdf_path.exists():
-        print(f"error: {pdf_path} does not exist", file=sys.stderr)
+    if suffix not in PAPERS:
+        print(f"error: {source.name} is not a .docx, .tex or .zip file", file=sys.stderr)
         return 2
 
     try:
-        issues = run_all_checks(pdf_path, rules)
-    except UnreadablePdf as exc:
+        project = Project.open(source, fresh=args.fresh)
+        if args.title or args.author or args.abstract:
+            project.set_front(args.title, parse_authors(args.author) or None, args.abstract)
+
+        if args.command == "inspect":
+            findings = project.findings(classify=args.classify)
+            print_findings(findings)
+            for r in project.reports:
+                print(f"  Fig. {r.figure}  {Path(r.path).name}: {r.width_px}x{r.height_px} px, "
+                      f"{r.dpi:.0f} dpi, {r.verdict}"
+                      + (f", classifier {r.ai_score:.0%}" if r.ai_score is not None else ""))
+            return 1 if any(f.severity == "error" for f in findings) else 0
+
+        if args.command == "fit":
+            options = project.fit(rules)
+            chosen = next((o for o in options if o.policy == args.policy), options[0])
+            if len(options) == 2:
+                print("Readable figures and the page limit conflict; using the "
+                      f"'{chosen.policy}' layout (--policy to choose).\n")
+            print("\n".join(describe(chosen)) + "\n")
+            project.apply_fit(chosen)
+
+        if args.command == "export":
+            out = args.output or source.with_name(source.stem + "-submission.zip")
+            project.export(out, rules)
+            print(f"exported -> {out}")
+            return 0
+
+        result = project.build(rules)
+    except (TectonicNotFound, PandocNotFound, PandocFailed, OpenFailed, FitFailed,
+            RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    if args.fix and any(i.can_fix for i in issues):
-        fixed_path = pdf_path.with_name(pdf_path.stem + "-fixed.pdf")
-        try:
-            embed_fonts(pdf_path, fixed_path)
-        except (GhostscriptNotFound, RepairFailed) as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return 2
-
-        # Never trust the exit code. Ghostscript returns zero on files it
-        # did not change, so the only proof of a repair is a fresh check.
-        issues = run_all_checks(fixed_path, rules)
-        print(f"repaired -> {fixed_path}\n")
-        pdf_path = fixed_path
-
-    print_report(issues, pdf_path)
-
-    # non-zero when something would block submission, so this can gate a script
-    return 1 if any(i.severity == "error" for i in issues) else 0
+    if not result.ok:
+        print(f"error: the paper did not compile.\n{result.log}", file=sys.stderr)
+        return 2
+    print_findings(project.findings())
+    print(f"built -> {result.pdf} ({result.pages} pages)\n")
+    if getattr(args, "fix", False):
+        return _check(result.pdf, rules, True)
+    print_report(result.issues, result.pdf)
+    return 1 if any(i.severity == "error" for i in result.issues) else 0
 
 
 if __name__ == "__main__":

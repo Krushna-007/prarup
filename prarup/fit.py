@@ -208,7 +208,7 @@ def describe(report: FitReport) -> list[str]:
         text = lambda pt: "text not measured" if pt is None else f"text {pt:.1f} pt"
         moved = (abs(c.width_after - c.width_before) >= SLACK
                  or c.double_after != c.double_before)
-        head = f"Fig. {c.index} (page {c.page}): "
+        head = f"{c.name or f'Fig. {c.index}'} (page {c.page}): "
         if moved:
             line = (head + f"{_size(c.width_before)}, {span(c.double_before)}, {text(c.text_before)}"
                     f"  ->  {_size(c.width_after)}, {span(c.double_after)}, {text(c.text_after)}")

@@ -70,7 +70,18 @@ def vector_text(page: pymupdf.Page, rect: pymupdf.Rect) -> float | None:
     return small_text(sizes)
 
 
+_OCR_CACHE: dict = {}
+
+
 def ocr_text_per_width(image: Path) -> float | None:
+    """Cached per file and modification time: rebuilds after an edit reuse it."""
+    key = (str(image), image.stat().st_mtime if image.exists() else 0)
+    if key not in _OCR_CACHE:
+        _OCR_CACHE[key] = _ocr_text_per_width(image)
+    return _OCR_CACHE[key]
+
+
+def _ocr_text_per_width(image: Path) -> float | None:
     """Font size per pixel of image width, read with Tesseract.
 
     Multiply by the printed width in points to get the printed font size,

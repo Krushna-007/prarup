@@ -24,11 +24,12 @@ from prarup import images as forensics
 from prarup.analyze import Finding, analyze
 from prarup.checks import UnreadablePdf, run_all_checks
 from prarup.compile import compile_pdf
-from prarup.figures import find_graphics
+from prarup.figures import find_graphics, instrument
+from prarup.measure import measure
 from prarup.fit import FitFailed, describe, fit_paper
 from prarup.ingest import open_paper
 from prarup.manuscript import Block, Manuscript
-from prarup.models import Author, Rules
+from prarup.models import Author, Issue, Rules
 from prarup.renderer import render
 
 
@@ -181,14 +182,26 @@ class Project:
         return self.folder / "paper.tex"
 
     def build(self, rules: Rules) -> BuildResult:
+        """Write the IEEE LaTeX, compile it once with every figure marked,
+        measure the figures, then strip the marks to leave a clean PDF."""
+        latex = render(self.m, self.folder)
         tex = self.tex_path()
-        tex.write_text(render(self.m, self.folder))
-        pdf, log = compile_pdf(tex, self.folder / "build")
-        if not pdf.exists():
+        tex.write_text(latex)
+        marked = tex.with_name("paper-measure.tex")
+        marked.write_text(instrument(latex))
+        out = self.folder / "build"
+        measured_pdf, log = compile_pdf(marked, out)
+        if not measured_pdf.exists():
             self.last_build = BuildResult(None, [], _readable_error(log))
             return self.last_build
+        graphics = find_graphics(latex)
+        _, figures = measure(measured_pdf, graphics, self.folder)
+        numbers = {img: n for n, fig in enumerate(self.m.figures(), start=1) for img in fig.images}
+        names = {g.index: numbers.get(g.path) for g in graphics}
+        pdf = out / "paper.pdf"
+        _strip_marks(measured_pdf, pdf)
         try:
-            issues = run_all_checks(pdf, rules)
+            issues = run_all_checks(pdf, rules) + _small_text(figures, rules, names)
         except UnreadablePdf as exc:
             issues = []
             log = str(exc)
@@ -211,6 +224,13 @@ class Project:
                     options.append(within)
             except FitFailed:
                 pass
+        # the fitter counts every \includegraphics; name them as the paper does
+        numbers = {img: n for n, fig in enumerate(self.m.figures(), start=1) for img in fig.images}
+        paths = {g.index: g.path for g in find_graphics(tex.read_text())}
+        for report in options:
+            for change in report.changes:
+                number = numbers.get(paths.get(change.index))
+                change.name = f"Fig. {number}" if number else "Image in the text"
         return options
 
     def apply_fit(self, report) -> None:
@@ -272,6 +292,30 @@ class Project:
                        "Compile with XeLaTeX or Tectonic:  tectonic paper.tex\n"
                        "prarup-report.md lists what was checked and what is still open.\n")
         return destination
+
+
+def _strip_marks(marked: Path, clean: Path) -> None:
+    """Remove the invisible prarup:fig links used for measuring."""
+    with pymupdf.open(marked) as doc:
+        for page in doc:
+            for link in page.get_links():
+                if (link.get("uri") or "").startswith("prarup:fig:"):
+                    page.delete_link(link)
+        doc.save(clean, garbage=3, deflate=True)
+
+
+def _small_text(figures: list, rules: Rules, names: dict) -> list:
+    """GEOM-03: a figure whose text prints smaller than the readable minimum."""
+    issues = []
+    for m in figures:
+        if m.text_pt is not None and m.text_pt < rules.min_figure_text_pt - 0.05:
+            name = f"Fig. {names[m.index]}" if names.get(m.index) else "an image"
+            issues.append(Issue(
+                code="GEOM-03", severity="warning", can_fix=False,
+                message=(f"{name} (page {m.page}) prints its text at {m.text_pt:.1f} pt; "
+                         f"the minimum is {rules.min_figure_text_pt:g}. Use Fit figures"),
+            ))
+    return issues
 
 
 def _readable_error(log: str) -> str:
