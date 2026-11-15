@@ -95,48 +95,36 @@ turns a missing or corrupt file into `UnreadablePdf` with a readable message.
 
 ---
 
-## Asset handling in .docx conversion
+## Images in a .docx
 
-pandoc emits `\includegraphics{media/rId9.png}` for every image whether or not
-you ask for extraction. Without `--extract-media` it never writes the file that
-reference points at, so the document compiles with the figures silently absent.
+pandoc names every Word image (`media/rId9.png`) but writes the file only when
+asked to extract media. `pandoc.read` runs it inside the project folder with
+`--extract-media=.`; pandoc appends its own `media` folder, so `=media` would
+write `media/media/rId9.png`. `ingest._bring_media` and `_bring_inline_images`
+then make sure every image a block uses is inside `media/`, and a missing one
+becomes FIG-03 instead of a compile error.
 
-```bash
-pandoc paper.docx -t latex --extract-media=. -o paper.tex     # run inside out_dir
-```
-
-- **`--extract-media=.`, not a directory name.** pandoc appends its own `media`
-  folder to whatever you give it, so `--extract-media=media` writes
-  `media/media/rId9.png` while the `.tex` refers to `media/rId9.png`.
-- **`--standalone` only when compiling pandoc's output directly.** The build
-  pipeline asks for a body fragment and wraps it in the IEEE template instead.
-
-`tests/test_ingest.py` checks that images are copied into the project and that a missing one is reported.
+`tests/test_ingest.py` checks that images are copied into the project and that
+a missing one is reported.
 
 ---
 
-## From a pandoc fragment to an IEEE paper
+## From the outline to an IEEE paper
 
-`document_from_latex` does three things, each covered by tests:
+`renderer.render` writes the Manuscript into `templates/ieee.tex.j2`:
 
-1. **Title.** A Word document usually has its own name as the only top-level
-   heading, with the real sections under it. That heading becomes the title
-   (unless one was typed in the window) and is removed from the body.
-2. **Heading levels.** With the wrapper heading gone, every heading moves up one
-   level, shallowest first, so `\subsubsection` lands one level up and not two.
-3. **Figure placement.** Bare `\begin{figure}` gets `[htbp]`. Without it, IEEEtran
-   may float a figure above the abstract.
-
-Title, authors and abstract are typed in the window (or passed as `--title`,
-`--author "Name:Affiliation"`, `--abstract`), because a `.docx` carries none of
-them in a form pandoc exposes.
-
-## pandoc defines its own macros
-
-pandoc writes `tightlist`, `pandocbounded` and others. These are pandoc's, not
-the author's, so `find_custom_macros` filters them before warning that the
-author's own `\newcommand` definitions may not have survived conversion. The
-template defines `\tightlist`, which IEEEtran lacks.
+1. **Title, authors, abstract, keywords** come from the front-matter fields,
+   found by `ingest` and editable in the window. An empty abstract writes no
+   heading at all.
+2. **Figures** use the width and one/two-column choice saved by the fitter;
+   a figure with no image prints a visible "image missing" box.
+3. **Tables** are written as `tabular`/`tabularx`, spanning both columns when
+   the text is too wide for one. pandoc's `longtable` is illegal in two columns.
+4. **Equations**: an `align` nested inside `\[ \]` is unwrapped and its labels kept.
+5. **Author LaTeX**: only safe maths packages and macros are carried over
+   (`texsource.preamble_extras`), with `\newcommand` turned into
+   `\providecommand` so a clash cannot stop the build. The template provides the
+   commands pandoc writes (`\tightlist`, `\pandocbounded`, `\texorpdfstring`).
 
 ---
 
