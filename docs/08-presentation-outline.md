@@ -1,6 +1,6 @@
 # 08 · Presentation Outline
 
-**13 slides.** Product story first, one dedicated Python design slide.
+**14 slides.** Product story first, one dedicated Python design slide.
 Copy this content into the PPT template as-is.
 
 > **If you run short on time, cut slide 4 or slide 11. Never cut slide 7.**
@@ -153,6 +153,35 @@ The value is not algorithmic difficulty. It is that nobody bothered."
 **Say:** "Shrinking a figure to fit is easy. Shrinking it without making it
 unreadable is the hard part. The IEEE journal paper we tested prints its figure
 labels at 2.4 pt. Prarup would not let that happen."
+
+---
+
+## Slide 7c — ⭐ What is missing, and the images
+
+**Opened a real Word paper: Prarup reads it into a tagged outline and lists
+what is missing, before anything is built.**
+
+*Insert: `docs/images/walkthrough/1-opened-missing.png`*
+
+- Captions recognised however they were typed: after the image, before a
+  table, as a block quote; a caption whose image was lost is reported
+- Missing abstract, keywords, captions, images; figures and tables never
+  mentioned; citations with no reference; references never cited
+- Click a problem, its block opens; fix it there; the PDF rebuilds
+
+**AI-generated images, in three layers, reported as evidence:**
+
+| Layer | Real test image | Result |
+|---|---|---|
+| Signed C2PA manifest | Gemini image | "Created by Google Generative AI", SynthID applied |
+| Generator traces | Stable Diffusion image | Steps 30, Euler a, seed |
+| Classifier (optional) | AI images with metadata stripped | 1.00 |
+
+*Insert: `docs/images/walkthrough/2-ai-image-found.png`*
+
+**Say:** "We measured the classifier on 26 real figures: it falsely flagged 4
+charts. So it only runs on photo-like images, and we say so. Evidence, never a
+verdict."
 
 ---
 
