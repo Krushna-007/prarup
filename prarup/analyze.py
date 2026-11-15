@@ -37,12 +37,11 @@ def _cited_keys(m: Manuscript) -> set:
 
 
 def _numeric_citations(m: Manuscript) -> set:
-    """Reference numbers cited as [3], [2, 5] or [4-6] in running text."""
+    """Reference numbers cited as [3], [2, 5] or [4-6] in running text and the abstract."""
     numbers = set()
-    for b in m.blocks:
-        if b.kind not in ("para", "list", "quote"):
-            continue
-        for group in re.findall(r"\\?\[(\d+(?:\s*[-–,]\s*\d+)*)\\?\]", b.text):
+    texts = [m.abstract] + [b.text for b in m.blocks if b.kind in ("para", "list", "quote")]
+    for text in texts:
+        for group in re.findall(r"\\?\[(\d+(?:\s*[-–,]\s*\d+)*)\\?\]", text):
             for part in re.split(r"\s*,\s*", group):
                 if re.match(r"\d+\s*[-–]\s*\d+", part):
                     a, z = map(int, re.split(r"\s*[-–]\s*", part))
@@ -140,9 +139,12 @@ def analyze(m: Manuscript, project: Path) -> list[Finding]:
                     add("REF-03", "warning", f"Reference [{key}] is never cited.", r.id)
     elif entries:
         numbers = _numeric_citations(m)
+        # a [99] in a paper with 50 references is broken whatever the citation style
+        for n in sorted(x for x in numbers if x > entries):
+            add("REF-02", "error", f"Citation [{n}] points past the {entries} references.",
+                next((b.id for b in m.blocks if b.kind in ("para", "list", "quote")
+                      and re.search(rf"\\?\[{n}\\?\]", b.text)), ""))
         if len(numbers) >= 3:                 # the paper uses numbered citations
-            for n in sorted(x for x in numbers if x > entries):
-                add("REF-02", "error", f"Citation [{n}] points past the {entries} references.")
             for n in range(1, entries + 1):
                 if n not in numbers:
                     add("REF-03", "warning", f"Reference [{n}] is never cited.", refs[0].id)
