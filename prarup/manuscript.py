@@ -55,6 +55,7 @@ class Manuscript:
     api: list = field(default_factory=list)      # pandoc-api-version
     notes: list = field(default_factory=list)    # what ingest noticed, for the user
     preamble: str = ""            # the author's maths packages and macros (LaTeX input)
+    source_mtime: float = 0.0     # when the source was read; newer source means re-read it
 
     def figures(self) -> list:
         return [b for b in self.blocks if b.kind == "figure"]
