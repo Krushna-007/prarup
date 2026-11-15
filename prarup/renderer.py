@@ -127,10 +127,12 @@ def _table_latex(block, caption: str, rows: list, header_rows: int,
 def _figure_latex(block, caption: str, project: Path) -> str:
     parts = []
     share = 0.98 / max(1, len(block.images))
+    base = r"\textwidth" if block.double else r"\columnwidth"
     for path in block.images or [""]:
         file = project / path if path else None
         if file and file.is_file() and file.suffix.lower() in BITMAPS_TEX_READS:
-            parts.append(f"\\includegraphics[width={share:.2f}\\columnwidth]{{{path}}}")
+            width = block.fit_width if block.fit_width and len(block.images) == 1 else f"{share:.2f}{base}"
+            parts.append(f"\\includegraphics[width={width}]{{{path}}}")
         else:
             why = "image missing" if not path or not (file and file.is_file()) else \
                 f"{file.suffix} cannot be placed; replace it with PNG or PDF"
@@ -139,8 +141,9 @@ def _figure_latex(block, caption: str, project: Path) -> str:
                          f"{{\\centering\\footnotesize\\textbf{{{why}}}\\\\{name}}}}}")
     label = f"\\label{{{block.label}}}" if block.label else ""
     cap = f"\\caption{{{caption}}}{label}\n" if caption else ""
-    return ("\\begin{figure}[htbp]\n\\centering\n" + "\\hfill\n".join(parts) + "\n" + cap
-            + "\\end{figure}")
+    env = "figure*" if block.double else "figure"
+    return (f"\\begin{{{env}}}[htbp]\n\\centering\n" + "\\hfill\n".join(parts) + "\n" + cap
+            + f"\\end{{{env}}}")
 
 
 def _references_latex(m: Manuscript, block, entries_latex: list[str]) -> str:

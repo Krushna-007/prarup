@@ -36,6 +36,8 @@ class Block:
     label: str = ""               # cross-reference label, if the source had one
     number: int = 0               # number the author gave it, 0 if none
     widths: list = field(default_factory=list)   # width the source asked for, inches
+    fit_width: str = ""           # width chosen by the fitter, e.g. "0.62\\columnwidth"
+    double: bool = False          # spans both columns (figure*)
     # references
     entries: list = field(default_factory=list)  # one Markdown string per reference
     keys: list = field(default_factory=list)     # citation key of each entry, if known

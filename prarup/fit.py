@@ -65,9 +65,25 @@ def _width_expr(width: float, double: bool, geometry) -> str:
     return f"{math.floor(width / base * 1000) / 1000:g}{name}"
 
 
-def plan(graphic, m, geometry, min_pt: float):
-    """(width, double, smallest_width, note) for one measured graphic."""
+# Under the "limit" policy no figure shrinks below this share of its
+# column, however much it would help the page count.
+LIMIT_FLOOR = 0.4
+
+
+def plan(graphic, m, geometry, min_pt: float, policy: str = "readable"):
+    """(width, double, smallest_width, note) for one measured graphic.
+
+    "readable": text never below min_pt, moving across both columns if it
+    must. "limit": the page limit first; the figure stays in its column and
+    may shrink to LIMIT_FLOOR of it, and the report shows its text size.
+    """
     double = graphic.env == "figure*"
+    if policy == "limit":
+        widest = geometry.text if double else geometry.column
+        if abs(m.width - widest) < SLACK:
+            widest = m.width
+        target = min(m.width, widest)
+        return target, double, min(target, LIMIT_FLOOR * widest), ""
     k = m.text_per_width
     # aim SLACK wider: the built figure comes out up to a point narrower
     # than asked, and the width is rounded down, which would otherwise
@@ -89,7 +105,7 @@ def plan(graphic, m, geometry, min_pt: float):
     return max(floor, min(m.width, widest)), double, floor, note
 
 
-def fit_paper(source: Path, out_dir: Path, rules: Rules) -> FitReport:
+def fit_paper(source: Path, out_dir: Path, rules: Rules, policy: str = "readable") -> FitReport:
     """Fit the figures of a .tex paper and return what changed."""
     tex = source.read_text()
     graphics = find_graphics(tex)
@@ -114,7 +130,7 @@ def fit_paper(source: Path, out_dir: Path, rules: Rules) -> FitReport:
         if g.reason:
             change.note = f"left alone because {g.reason}"
         else:
-            width, double, floor, change.note = plan(g, m, geometry, rules.min_figure_text_pt)
+            width, double, floor, change.note = plan(g, m, geometry, rules.min_figure_text_pt, policy)
             targets[g.index] = (width, double)
             floors[g.index] = floor
         changes.append(change)
@@ -144,7 +160,9 @@ def fit_paper(source: Path, out_dir: Path, rules: Rules) -> FitReport:
             summary = (f"Still about {over:.1f} pages over the {rules.page_limit}-page limit with "
                        f"every figure at its smallest readable size. Cut text or figures; "
                        f"shrinking further would make figure text smaller than "
-                       f"{rules.min_figure_text_pt:g} pt.")
+                       f"{rules.min_figure_text_pt:g} pt.") if policy == "readable" else (
+                       f"Still about {over:.1f} pages over the {rules.page_limit}-page limit even with "
+                       f"every figure at {LIMIT_FLOOR:.0%} of its column. Cut text.")
         else:
             low, high = 0.0, 1.0                 # low always fits, high does not
             for _ in range(SEARCH_STEPS):
@@ -153,7 +171,8 @@ def fit_paper(source: Path, out_dir: Path, rules: Rules) -> FitReport:
             best = low
 
     fitted = resize(tex, layout(best))
-    fitted_tex = source.with_name(f"{stem}-fitted.tex")
+    fitted_tex = source.with_name(f"{stem}-fitted.tex" if policy == "readable"
+                                  else f"{stem}-fitted-limit.tex")
     fitted_tex.write_text(fitted)
 
     # measure the result rather than trusting the arithmetic
@@ -174,7 +193,7 @@ def fit_paper(source: Path, out_dir: Path, rules: Rules) -> FitReport:
     if not pdf.exists():
         raise FitFailed(log or "the fitted paper did not compile")
     return FitReport(changes, pages_before, _pages(pdf), rules.page_limit,
-                     fitted_tex, pdf, summary)
+                     fitted_tex, pdf, summary, policy, rules.min_figure_text_pt)
 
 
 def _size(points: float) -> str:
@@ -197,6 +216,8 @@ def describe(report: FitReport) -> list[str]:
                 line += f"  (was {c.overflow_before:.0f} pt past its column)"
         else:
             line = head + f"unchanged, {_size(c.width_after)}, {text(c.text_after)}"
+        if c.text_after is not None and c.text_after < report.min_pt - 0.05:
+            line += f"  [text below {report.min_pt:g} pt]"
         if c.note:
             line += f"  [{c.note}]"
         lines.append(line)

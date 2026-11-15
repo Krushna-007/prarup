@@ -15,8 +15,12 @@ evidence, never as a verdict:
    generator named as the creating software. Tested on a real Stable
    Diffusion image from Wikimedia Commons.
 3. A classifier (optional install): a pretrained AI-or-not model run
-   locally. A likelihood only: it was trained on photos and art, not
-   scientific figures.
+   locally. A likelihood only, and run on photo-like images only. On the
+   figures of five real papers it scored 4 of 26 charts and logos at 0.85
+   to 1.00 (false alarms), while every photo stayed at or below 0.44 and
+   all four real AI images scored 1.00. Charts are told apart by colour:
+   their 8 most common colours cover at least 90% of the pixels (0.94 to
+   1.00 measured), against 0.47 to 0.89 for photos and AI art.
 
 Finding nothing proves nothing: Word, screenshots and most editors strip
 metadata. The report says so.
@@ -65,6 +69,7 @@ class ImageReport:
     dpi: float = 0.0
     evidence: list = field(default_factory=list)
     ai_score: float | None = None     # classifier likelihood, if it ran
+    ai_note: str = ""                 # why the classifier did not run
     duplicate_of: str = ""
     readable: bool = True
     error: str = ""
@@ -179,12 +184,32 @@ def ai_likelihood(path: Path) -> float | None:
     if _pipeline is None:
         from transformers import pipeline
         _pipeline = pipeline("image-classification", model=CLASSIFIER)
-    with Image.open(path) as im:
-        scores = _pipeline(im.convert("RGB"))
+    try:
+        with Image.open(path) as im:
+            scores = _pipeline(im.convert("RGB"))
+    except Exception:                       # unreadable or not a bitmap
+        return None
     for s in scores:
         if s["label"].lower() in ("ai", "artificial", "fake", "ai_generated", "ai-generated"):
             return float(s["score"])
     return None
+
+
+CHART_SHARE = 0.9
+
+
+def photo_like(image: Image.Image) -> bool:
+    """False for charts, diagrams and logos, where the classifier gives false alarms."""
+    small = image.convert("RGB")
+    small.thumbnail((256, 256))
+    pixels = list(small.get_flattened_data() if hasattr(small, "get_flattened_data")
+                  else small.getdata())
+    counts: dict = {}
+    for r, g, b in pixels:
+        key = (r // 32, g // 32, b // 32)
+        counts[key] = counts.get(key, 0) + 1
+    top = sum(sorted(counts.values(), reverse=True)[:8])
+    return top / max(1, len(pixels)) < CHART_SHARE
 
 
 # ---------------------------------------------------------------- duplicates
@@ -243,7 +268,13 @@ def inspect(m: Manuscript, project: Path, classify: bool = False,
             if report.width_px and report.printed_inches:
                 report.dpi = report.width_px / report.printed_inches
             if classify and report.readable:
-                report.ai_score = ai_likelihood(file)
+                with Image.open(file) as im:
+                    photo = photo_like(im)
+                if photo:
+                    report.ai_score = ai_likelihood(file)
+                else:
+                    report.ai_note = ("chart or diagram: the classifier gives false alarms on these, "
+                                      "so it was not run")
             if h is not None:
                 twin = next((p for p, other in hashes if _close(h, other)), "")
                 report.duplicate_of = twin

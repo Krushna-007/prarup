@@ -166,3 +166,5 @@ class FitReport:
     fitted_tex: Path | None = None
     pdf: Path | None = None
     summary: str = ""
+    policy: str = "readable"      # or "limit"
+    min_pt: float = 7.0

@@ -78,3 +78,33 @@ def test_findings_for_ai_and_duplicates(tmp_path):
     assert "Created by Google Generative AI" in codes["IMG-02"]
     assert "Stable Diffusion" in codes["IMG-03"]
     assert "plot.png" in codes["IMG-05"]
+
+
+@pytest.mark.parametrize("name,photo", [
+    ("ai_stripped_elf.png", True), ("ai_stripped_android.png", True), ("sd_parameters.png", True),
+])
+def test_ai_art_counts_as_photo_like(name, photo):
+    from prarup.images import photo_like
+    with Image.open(IMAGES / name) as im:
+        assert photo_like(im) is photo
+
+
+def test_a_chart_is_not_photo_like_so_the_classifier_skips_it():
+    from prarup.images import photo_like
+    with Image.open(PLOT) as im:
+        assert photo_like(im) is False
+
+
+def test_classifier_flags_stripped_ai_art_when_installed(tmp_path):
+    from prarup.images import classifier_available
+    if not classifier_available():
+        pytest.skip("classifier not installed (poetry install --with ai)")
+    media = tmp_path / "media"
+    media.mkdir()
+    (media / "elf.png").write_bytes((IMAGES / "ai_stripped_elf.png").read_bytes())
+    (media / "plot.png").write_bytes(PLOT.read_bytes())
+    m = _paper(tmp_path, [["media/elf.png"], ["media/plot.png"]])
+    elf, plot = inspect(m, tmp_path, classify=True)
+    assert elf.ai_score > 0.9 and elf.verdict == "classifier: likely AI"
+    assert plot.ai_score is None and "chart or diagram" in plot.ai_note
+    assert [f.code for f in findings([elf, plot]) if f.code != "IMG-01"] == ["IMG-04"]
