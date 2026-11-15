@@ -97,6 +97,21 @@ def _bold_heading(block: dict) -> list | None:
     return [x for i in inner for x in i["c"]]
 
 
+_SECTION_NAMES = re.compile(
+    r"^\s*(?:\d+\.?\s*|[IVX]+\.\s*)?(introduction|background|related work|literature review|"
+    r"methodology|methods?|proposed method|materials and methods|system model|experiments?|"
+    r"experimental (?:setup|results?)|evaluation|results?(?: and discussion)?|discussion|"
+    r"conclusions?(?: and future work)?|future work|acknowledge?ments?|appendix)\s*:?\s*$", re.I)
+
+
+def _named_section(block: dict) -> str | None:
+    """A short line that is a standard section name ("Introduction:"), bold or not."""
+    if block.get("t") not in ("Para", "Plain"):
+        return None
+    text = pandoc.stringify(block)
+    return text.rstrip(":").strip() if _SECTION_NAMES.match(text) else None
+
+
 def _equation(block: dict) -> str | None:
     """The LaTeX of a paragraph that is one equation, with an optional "(2)"."""
     if block.get("t") not in ("Para", "Plain"):
@@ -347,6 +362,13 @@ def _body(blocks: list, m: Manuscript, start_id: int = 1) -> list[Block]:
 
         if kind == "Header":
             add(kind="heading", level=block["c"][0], node=[block], text=block["c"][2])
+            i += 1
+            continue
+
+        named = _named_section(block)
+        if named is not None:
+            add(kind="heading", level=1, node=[block], text=[{"t": "Str", "c": named}],
+                detected="section name on its own line")
             i += 1
             continue
 
