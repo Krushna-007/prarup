@@ -15,7 +15,46 @@ repaired automatically, and where it cannot, what the author has to do.
 | GEOM-03 | Text margins | n/a | n/a | Not built |
 | STRUCT-01 | Caption placement | n/a | n/a | Not built |
 
-All of them live in `prarup/checks.py` as plain functions.
+These run on the compiled PDF and live in `prarup/checks.py`. Build also
+reports **GEOM-03**: a figure whose text prints below the readable minimum
+(7 pt), measured in the same compile ([15 · The Figure Fitter](15-figure-fitter.md)).
+
+## Before the PDF: what is missing (`analyze.py`)
+
+Found from the paper's structure, before anything is compiled. Each finding
+names its block, and clicking it in the window opens that block.
+
+| Code | Finding | Severity |
+|---|---|---|
+| META-01 | No title | Error |
+| META-02 | No authors, or an author without an affiliation | Error / Warning |
+| META-03 | No abstract | Error |
+| META-04 | No keywords (Index Terms) | Warning |
+| FIG-01 | Figure without a caption | Warning |
+| FIG-02 | Figure never mentioned in the text ("Fig. 3", `\ref`, or a label) | Warning |
+| FIG-03 | Figure with a caption but no image, or an image file that is missing | Error |
+| FIG-04 | Image in a format the PDF cannot hold (EMF, WMF…) | Error |
+| TAB-01 | Table without a caption | Warning |
+| TAB-02 | Table never mentioned ("Table 2" or Roman "Table II") | Warning |
+| REF-01 | No references | Error |
+| REF-02 | A citation with no matching reference: an unknown key, or [99] past the list | Error |
+| REF-03 | A reference never cited | Warning |
+| STR-01 | No Introduction or no Conclusion | Warning |
+| STR-02 | An empty section | Warning |
+
+## Images (`images.py`)
+
+| Code | Finding | Severity |
+|---|---|---|
+| IMG-01 | Printed resolution under 300 dpi (pixels ÷ printed inches) | Warning |
+| IMG-02 | Declared AI-generated: a C2PA manifest or IPTC `trainedAlgorithmicMedia` | Error |
+| IMG-03 | AI generator traces: Stable Diffusion settings, a ComfyUI workflow, a generator named | Warning |
+| IMG-04 | The optional classifier rates a photo-like image at least 80% likely AI | Warning |
+| IMG-05 | The same image as another figure (difference hash, survives resizing) | Warning |
+| IMG-06 | The image cannot be read | Warning |
+
+How the AI layers were measured on real images is in
+[17 · Testing on Real Papers](17-real-world-testing.md).
 
 ---
 

@@ -84,3 +84,12 @@ def test_long_affiliations_break_at_commas():
     out = _lines("Department of Computer Science, College of Science, Nawroz University, Iraq")
     assert out.count("\\\\") >= 1
     assert all(len(line.strip(" \\")) <= 45 for line in out.split("\n"))
+
+
+@needs_tools
+def test_a_missing_abstract_leaves_no_empty_heading(tmp_path):
+    from prarup.renderer import render
+    m = open_paper(REAL / "svm_diabetes.docx", tmp_path)
+    m.abstract, m.keywords = "", ""
+    tex = render(m, tmp_path)
+    assert r"\begin{abstract}" not in tex and r"\begin{IEEEkeywords}" not in tex

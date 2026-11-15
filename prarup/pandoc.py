@@ -136,12 +136,17 @@ def _one_line(text: str) -> str:
 
 
 def markdown_to_latex(texts: list[str]) -> list[str]:
-    """Convert short Markdown texts (captions, titles) to LaTeX in one run."""
-    if not texts:
-        return []
-    source = f"\n\n{SEPARATOR}\n\n".join(_one_line(t) if t.strip() else "​" for t in texts)
+    """Convert short Markdown texts (captions, titles) to LaTeX in one run.
+
+    Empty texts stay empty: the template leaves out an empty abstract.
+    """
+    filled = [t for t in texts if t.strip()]
+    if not filled:
+        return ["" for _ in texts]
+    source = f"\n\n{SEPARATOR}\n\n".join(_one_line(t) for t in filled)
     out = _run(["-f", "markdown", "-t", "latex", "--wrap=none"], stdin=source)
-    return [p.strip().replace("​", "") for p in out.split(SEPARATOR)][:len(texts)]
+    converted = iter(p.strip() for p in out.split(SEPARATOR))
+    return [next(converted) if t.strip() else "" for t in texts]
 
 
 def latex_to_markdown(texts: list[str]) -> list[str]:

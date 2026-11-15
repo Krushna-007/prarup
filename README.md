@@ -4,9 +4,10 @@
 
 **Format-compliant research papers — before you submit.**
 
-An offline desktop tool that converts your manuscript to a target conference
-template, compiles it live, and verifies it against the submission system's
-actual rules while you can still fix things.
+An offline desktop tool. Open your paper (Word or LaTeX) and Prarup shows it
+as a tagged outline, lists everything that is missing, checks every image
+(resolution, AI-generated, duplicates), lets you fix it in place, and builds
+the IEEE conference PDF beside it, checked against the submission rules.
 
 `PC503 — Python Programming` · `DA-IICT`
 
@@ -21,20 +22,26 @@ actual rules while you can still fix things.
 
 ---
 
-## The pipeline
+## What it does
 
 ```mermaid
 flowchart LR
-    A[".tex / .docx"] --> B["Document Model"]
-    B --> C["IEEE Template<br/>Jinja2 → LaTeX"]
-    C --> D["Tectonic<br/>compile"]
-    D --> E["Pre-flight<br/>Compliance Check"]
-    E -->|issues found| B
-    E -->|all clear| F["Submission Bundle<br/>.tex + figures + .bib + report"]
+    A[".docx · .tex · .zip"] --> B["Read<br/>pandoc → tagged outline"]
+    B --> C["What is missing<br/>captions · abstract · refs · citations"]
+    B --> D["Images<br/>dpi · AI evidence · duplicates"]
+    C --> E["Fix in the editor"]
+    D --> E
+    E --> F["Build IEEE PDF<br/>Tectonic · fonts · pages · figure text size"]
+    F -->|"too small / too long"| G["Fit figures"]
+    G --> F
+    F --> H["Export<br/>PDF · .tex · images · report"]
 
-    style E fill:#ff6b35,stroke:#333,color:#fff
-    style F fill:#2a9d8f,stroke:#333,color:#fff
+    style C fill:#ff6b35,stroke:#333,color:#fff
+    style D fill:#ff6b35,stroke:#333,color:#fff
+    style H fill:#2a9d8f,stroke:#333,color:#fff
 ```
+
+![The window on a damaged real paper: outline, missing items, the PDF](docs/images/walkthrough/1-opened-missing.png)
 
 ---
 
@@ -81,6 +88,8 @@ will report successes it did not achieve. See
 | [13 · Pitfalls](docs/13-pitfalls.md) | Silent failures, environment traps, demo rehearsal checklist |
 | [14 · How To Build It](docs/14-how-to-build.md) | Minimal design, walking skeleton, the first ten tests, design rules |
 | [15 · The Figure Fitter](docs/15-figure-fitter.md) | Fitting figures to their columns and the page limit without making their text unreadable |
+| [16 · Redesign](docs/16-redesign.md) | Audit on real papers, the user journey, architecture and data model diagrams |
+| [17 · Testing on Real Papers](docs/17-real-world-testing.md) | Six real papers, AI-image detection measured, damaged papers fixed in the window |
 
 ---
 
@@ -97,101 +106,71 @@ will report successes it did not achieve. See
 ## Quick start
 
 ```bash
-poetry install
-poetry run python tools/make_fixtures.py     # generate test PDFs
-poetry run pytest                             # 160 tests
-```
-
-External tools: `tectonic` to compile, `pandoc` for `.docx`, `ghostscript` to
-repair fonts, `tesseract` to read text inside bitmap figures (optional: without it,
-bitmap figures are kept inside their column but not sized for readability). On macOS:
-
-```bash
 brew install tectonic pandoc ghostscript tesseract
+poetry install                    # add --with ai for the optional AI-image classifier
+poetry run prarup-gui             # the desktop window
+poetry run pytest                 # 169 tests, the window included, headless
 ```
+
+`tectonic` builds the PDF, `pandoc` reads Word and LaTeX, `ghostscript` repairs
+fonts, `tesseract` measures text inside bitmap figures (optional).
 
 ## Using it
 
-```bash
-poetry run prarup build paper.docx \
-    --author "Krushna Parmar:DA-IICT" \
-    --abstract "A short abstract."          # convert, template, compile, verify
+**The window.** Open a `.docx`, a `.tex`, or a LaTeX project as a `.zip` (or drop
+it on the window).
 
-poetry run prarup build paper.tex           # compile, verify
-poetry run prarup check paper.pdf           # verify an existing PDF
-poetry run prarup check paper.pdf --fix     # repair, then re-verify
-poetry run prarup fit paper.docx            # resize figures to fit, keep their text readable
-poetry run prarup-gui                       # the desktop window
-```
+- **Left:** the paper as an outline, every block tagged: `TITLE AUTH ABS KEY`,
+  `H1 H2`, `P`, `FIG 3`, `TAB 2`, `EQ`, `REF`. A ⚠ marks a block with a problem.
+- **Middle:** the editor for the chosen block: the title block (title,
+  authors and affiliations, abstract, keywords); text, which can be re-tagged
+  as a heading or paragraph; a figure, with each image's pixels, printed dpi
+  and AI evidence, Replace / Add image, and the caption; a table with
+  editable cells; an equation; the references. Below it: **Missing**,
+  **Images**, **PDF checks**, **Figure fit**, **Notes**. Click a problem to open
+  its block.
+- **Right:** the IEEE PDF, rebuilt a moment after each edit.
+- **Toolbar:** Build · Fit figures · Fix PDF (embed fonts) · AI classifier ·
+  Export (a zip with the PDF, LaTeX, images, bibliography and a report).
 
-![The window](docs/images/window-clean.png)
+Edits are saved as you go in `<paper>-prarup/` beside the paper, and come
+back when you reopen it.
 
-Title, authors and abstract are **read from the Word file**: from Word's own
-Title and Author styles when used, otherwise from the paragraphs above the one
-starting "Abstract". The window fills its fields with what it found, and
-anything typed there (or passed as `--title`, `--author`, `--abstract`) wins.
-
-### Fitting figures
-
-A Word figure keeps its size in inches, so a wide one runs across the second
-IEEE column. **Build** reports it (GEOM-02); **Fit figures** resizes every
-figure to fit its column, moves it across both columns if one column would
-shrink its text below 7 pt, and shrinks figures together when the paper is over
-the page limit, never below 7 pt. See [15 · The Figure Fitter](docs/15-figure-fitter.md).
-
-| Build: the chart runs into the second column | Fit figures: across both columns, text 7.0 pt |
+| The AI image, with Google's signed evidence | Figures fitted: text from 3.9 pt to 7.0 pt |
 |---|---|
-| ![Before](docs/images/window-overlap.png) | ![After](docs/images/window-fitted.png) |
+| ![](docs/images/walkthrough/2-ai-image-found.png) | ![](docs/images/walkthrough/4-figures-fitted.png) |
 
-Try it with `tests/fixtures/demo_paper.docx`.
+**The command line** does the same through the same code:
 
-A `.docx` is converted to a body fragment, wrapped in the IEEE conference
-template, and compiled. A `.tex` is compiled as it stands, because there is no
-reliable way to separate an author's preamble from their body.
-
-Real output on a published 13-page IEEE IoT Journal article (trimmed):
-
-```
-paper.pdf: 6 error(s), 1 warning(s)
-
-  ERROR  FONT-01  Helvetica is not embedded (pages 1-13)   [can fix automatically]
-  ERROR  FONT-02  STIXGeneral-Italic is a Type3 bitmap font (pages 9-12). Re-export the figure with matplotlib rcParams['pdf.fonttype'] = 42
-  ...
-  WARN   GEOM-01  7 pages over the 6-page limit
+```bash
+poetry run prarup inspect paper.docx      # what is missing, every image checked
+poetry run prarup build paper.docx        # build the IEEE PDF and check it
+poetry run prarup fit paper.tex           # fit figures (--policy readable|limit)
+poetry run prarup export paper.docx       # submission zip
+poetry run prarup check paper.pdf --fix   # check and repair a finished PDF
 ```
 
-Exit codes: `0` nothing blocking, `1` would be rejected, `2` the tool could not
-run. Usable as a gate in a submission script.
-
-`--fix` writes a repaired copy and re-runs every check on it. It never reports a
-repair it has not verified, never modifies the original, and leaves images at
-their original resolution and compression.
+Exit codes: `0` nothing blocking, `1` something would be rejected, `2` the
+tool could not run.
 
 ---
 
 ## Status
 
-**v0.9.** Working:
+**v1.0.** Tested on six real papers (three Word, three LaTeX from arXiv) and
+on damaged versions of them, through the window. All six compile; before the
+redesign, two of five did. See [17 · Testing on Real Papers](docs/17-real-world-testing.md).
 
-- `.docx` and `.tex` input, IEEE conference template, Tectonic compilation
-- Title, authors, abstract and keywords read from the Word file
-- **The figure fitter**: figures fitted to their columns and the page limit with
-  their text kept at 7 pt or more, measured from the compiled PDF (OCR for bitmaps)
-- Six compliance checks: unembedded fonts, Type3 fonts, page limit, encryption,
-  bookmarks, figures past their column
-- Ghostscript repair, re-checked, that leaves figures untouched
-- A PySide6 window over all of it, and the same on the command line
+| Area | What works |
+|---|---|
+| Reading | Word, LaTeX (with `\input`, `.bib`, inline bibliographies), zipped LaTeX projects; title, authors with affiliations, abstract, keywords; figures, captions, tables, equations, references, recognised in the layouts real papers use |
+| Missing | 15 kinds of finding: front matter, captions, missing images, uncited figures and tables, citations without references, uncited references, structure |
+| Images | Printed dpi; AI evidence from C2PA Content Credentials and IPTC tags, generator traces, and an optional classifier run only on photo-like images; duplicate figures |
+| Building | IEEE conference template, author's maths macros carried over, tables in two columns, Tectonic; fonts, Type3, page limit, encryption, bookmarks, figure text size |
+| Fitting | Figures sized for their column and the page limit, text kept readable; when both cannot hold, both layouts are offered |
+| Window | Outline, editors, problem panels, live PDF, export; edits saved and resumed |
 
-**Tested on a real paper.** A 13-page IEEE IoT Journal article: Prarup found the
-default-matplotlib Type3 fonts in its figures on pages 9 to 12, reported each
-font once with its pages, and repaired the unembedded Helvetica without changing
-a pixel of any figure.
+Not built: other templates (ACM, Springer), PDF/A, margin checks, an LLM
+writing assistant.
 
 **Python 3.11 to 3.13.** PySide6 publishes no wheels for 3.14 yet.
-
-160 tests pass, GUI included, headless. Every expected number in the fitter's
-tests is worked out by hand from the plot's own text size and the IEEE geometry.
-
-Not built yet: submission bundle export, auto-compile while typing, a caption
-editor, PDF/A, margin and caption-placement checks, and the LLM advisory layer. See [07 · Scope](docs/07-scope-and-timeline.md) and
-[11 · Compliance Rules](docs/11-compliance-rules.md).

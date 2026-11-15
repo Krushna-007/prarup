@@ -31,6 +31,11 @@ Tectonic, opening windows, calling an API) lives in other files.
 
 ## 2. Files
 
+> **The original plan.** The files as built are listed in
+> [02 · Architecture](02-architecture.md); `document.py`, `render.py`,
+> `convert.py` and `gui.py` below were replaced in the redesign
+> ([16 · Redesign](16-redesign.md)).
+
 Flat. One file per job. You should be able to guess what is in each one.
 
 ```

@@ -174,7 +174,7 @@ see red, click Fix, see green. Then show the target mockup from
 - **Plain functions** for the checks: PDF in, list of issues out. Adding a rule
   is one function and one line
 - **Real inheritance where Qt needs it:** `MainWindow(QWidget)`,
-  `BuildWorker(QThread)` with signals
+  `Worker(QThread)` with signals; `Project` as the one controller
 - **Custom exceptions** so every failure reaches the user as one sentence
 - **One rule enforced by a test:** `checks.py` may not import `subprocess`,
   Qt or network code

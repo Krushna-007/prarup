@@ -24,7 +24,7 @@ pandoc writes `\includegraphics` for every image but only writes the image files
 with `--extract-media=.`. Without it the LaTeX compiles and the paper has no
 figures. See [12 · Implementation Notes](12-implementation-notes.md).
 
-**Rule: every `\includegraphics` path must resolve.** `tests/test_convert.py`
+**Rule: every `\includegraphics` path must resolve.** `tests/test_ingest.py`
 checks it.
 
 ### A failed compile is checked against the last good PDF

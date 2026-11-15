@@ -173,22 +173,26 @@ Flat, one file per job, as [14 · How To Build It](14-how-to-build.md) argues:
 
 ```
 prarup/
-├── models.py      Issue, Rules, Author, Document … (dataclasses)
-├── checks.py      the compliance checks             (pure, no subprocess)
-├── document.py    pandoc fragment → Document        (pure)
-├── frontmatter.py title, authors, abstract from Word (pure)
-├── figures.py     find and resize \includegraphics  (pure)
-├── measure.py     figure boxes and text size        (runs Tesseract)
-├── fit.py         the figure fitter loop            (runs Tectonic)
-├── render.py      Document → IEEE LaTeX via Jinja2  (pure)
-├── convert.py     .docx → LaTeX                     (runs pandoc)
-├── compile.py     .tex → PDF                        (runs Tectonic)
-├── fix.py         embed fonts                       (runs Ghostscript)
-├── main.py        command line
-├── gui.py         the window
+├── models.py       Issue, Rules, Author, Measured, FitReport …   (dataclasses)
+├── manuscript.py   Manuscript, Block: the paper as tagged blocks (saved as JSON)
+├── pandoc.py       talk to pandoc's JSON tree, batched           (runs pandoc)
+├── ingest.py       .docx / .tex / .zip → Manuscript
+├── texsource.py    author blocks, \bibitem, .bib, macros       (pure)
+├── frontmatter.py  authors and affiliations, LaTeX → text       (pure)
+├── renderer.py     Manuscript → IEEE LaTeX via Jinja2
+├── analyze.py      what is missing                              (pure)
+├── images.py       dpi, AI evidence, duplicates                 (Pillow, c2pa)
+├── checks.py       PDF compliance checks                        (pure, no subprocess)
+├── compile.py      .tex → PDF                                   (runs Tectonic)
+├── figures.py      find and resize \includegraphics             (pure)
+├── measure.py      figure boxes and text size                   (runs Tesseract)
+├── fit.py          the figure fitter                            (runs Tectonic)
+├── fix.py          embed fonts                                  (runs Ghostscript)
+├── project.py      the controller: open, edit, check, build, fit, export
+├── main.py         command line
+├── ui/             the desktop window: window, outline, editors, panels, worker
 ├── presets/ieee.yaml
 └── templates/ieee.tex.j2
-tests/             160 tests, fixtures in tests/fixtures/
 ```
 
 The proposal's nested packages (`ingest/`, `verify/`, `llm/` …) were never needed

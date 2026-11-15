@@ -5,58 +5,60 @@ module does not have to rediscover these.
 
 ---
 
-## The pipeline, in one function
+## The pipeline
 
-`gui.build_paper` and `main.py` run the same sequence:
+`Project` (in `project.py`) runs it, for the window and the command line alike:
 
 ```
-.docx ──pandoc──▶ body fragment ──document_from_latex──▶ Document
-                                                           │
-                                         render(doc, "ieee")
-                                                           ▼
-.tex ─────────────────────────────────────────────────▶ paper.tex
-                                                           │
-                                                  compile_pdf (Tectonic)
-                                                           ▼
-.pdf ─────────────────────────────────────────────────▶ paper.pdf
-                                                           │
-                                                   run_all_checks
-                                                           ▼
-                                                     list[Issue]
+.docx / .tex / .zip ──pandoc──▶ JSON tree ──ingest──▶ Manuscript (tagged blocks)
+                                                          │   ▲
+                                         analyze, images  │   │ edits from the window,
+                                         (what is missing)│   │ saved to manuscript.json
+                                                          ▼   │
+                                              renderer ──▶ paper.tex (IEEE)
+                                                          │
+                              instrument + Tectonic, once ▼
+                                         measure figures ──▶ strip marks ──▶ paper.pdf
+                                                          │
+                                         run_all_checks + figure text size
+                                                          ▼
+                                                    list[Issue]
 ```
 
-A `.tex` is compiled as it stands, because there is no reliable way to separate
-an author's preamble from their body. A `.pdf` skips straight to the checks.
+Prarup no longer compiles an author's own LaTeX. It reads the paper into its
+own structure and writes it again into the IEEE template, carrying over only
+the author's safe maths packages and macros. That is what made real arXiv
+papers written for pdfLaTeX compile (see doc 17).
 
 ---
 
 ## Keeping the window responsive: QThread
 
 ```python
-class BuildWorker(QThread):
-    done = Signal(object, object)   # pdf_path, issues
+class Worker(QThread):
+    done = Signal(object)
     failed = Signal(str)
 
     def run(self):
         try:
-            pdf_path, issues = build_paper(...)
+            result = self.job()          # any Project call: open, build, fit, export
         except Exception as exc:
             self.failed.emit(str(exc))
         else:
-            self.done.emit(pdf_path, issues)
+            self.done.emit(result)
 ```
 
-The whole pipeline (pandoc, Tectonic, checks) runs in the worker. Results come
-back to the window through signals, which Qt delivers on the UI thread. Any
-failure, including a compile error or an unreadable PDF, is shown in the
-compliance list rather than swallowed.
+Every slow job runs in a worker; the result comes back through a signal, which
+Qt delivers on the UI thread. A failure is shown in a non-blocking message,
+never swallowed.
 
-The proposal planned `QProcess` for Tectonic alone. Running the whole pipeline
-in one worker thread turned out simpler, because the pandoc step and the checks
-need to be off the UI thread too.
+**Auto-compile:** each edit restarts a 1.5 s single-shot `QTimer`; when it
+fires, the paper is rebuilt in the background. An edit during a build sets a
+flag, and the build runs again when the current one finishes.
 
-**Not built yet:** auto-compile on typing (a debounced `QTimer`). The window has
-no editor pane yet, so the user clicks **Build**.
+**An editor must not emit `changed` while saving.** The window rebuilds the
+editor on `changed`, which deletes the widget that was saving. Editors' `save()`
+returns a message instead; only their Save buttons emit.
 
 ---
 
@@ -109,7 +111,7 @@ pandoc paper.docx -t latex --extract-media=. -o paper.tex     # run inside out_d
 - **`--standalone` only when compiling pandoc's output directly.** The build
   pipeline asks for a body fragment and wraps it in the IEEE template instead.
 
-`tests/test_convert.py` checks that every `\includegraphics` path resolves.
+`tests/test_ingest.py` checks that images are copied into the project and that a missing one is reported.
 
 ---
 

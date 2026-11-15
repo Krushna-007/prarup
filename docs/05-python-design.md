@@ -55,17 +55,41 @@ classDiagram
         +current_rules() Rules
         +show_issues(issues)
     }
-    class BuildWorker {
+    class Worker {
         +Signal done
         +Signal failed
         +run()
     }
+    class Project {
+        +Manuscript m
+        +open(source) Project
+        +findings() list~Finding~
+        +build(rules) BuildResult
+        +fit(rules) list~FitReport~
+        +export(path, rules)
+    }
+    class Manuscript {
+        <<dataclass>>
+        +str title
+        +list~Author~ authors
+        +list~Block~ blocks
+    }
+    class Block {
+        <<dataclass>>
+        +str id
+        +str kind
+        +str text
+        +str caption
+        +list images
+    }
 
     QWidget <|-- MainWindow
-    QThread <|-- BuildWorker
+    QThread <|-- Worker
+    Project *-- Manuscript
+    Manuscript *-- Block
     Document *-- Author
-    MainWindow ..> BuildWorker : starts
-    BuildWorker ..> Issue : emits
+    MainWindow ..> Worker : runs Project work in
+    MainWindow --> Project
 ```
 
 Everything else is a **plain function**.
@@ -74,17 +98,22 @@ Everything else is a **plain function**.
 |---|---|---|
 | `models.py` | `Issue`, `Rules`, `Author`, `Document`, `Graphic`, `Measured`, `Geometry`, `FigureChange`, `FitReport` | dataclasses; `Rules.load`, `Geometry.bounds` and two small properties are the only logic |
 | `checks.py` | `check_fonts`, `check_page_count`, `check_security`, `check_bookmarks`, `check_figure_overflow`, `run_all_checks` | pure functions: PDF path in, list of `Issue` out |
-| `document.py` | `document_from_latex` | pure string work |
 | `frontmatter.py` | `split_front_matter`, `latex_to_plain`, `escape_latex` | pure string work: title, authors, abstract from a Word paper |
 | `figures.py` | `find_graphics`, `resize`, `instrument` | pure string work: find and resize `\includegraphics` |
 | `measure.py` | `measure`, `ocr_text_per_width` | reads the PDF, runs Tesseract |
 | `fit.py` | `fit_paper`, `describe` | the figure fitter loop, runs Tectonic |
-| `render.py` | `render(document, template)` | pure: Jinja2 template to a string |
-| `convert.py` | `docx_to_tex`, `detect_front_matter`, `docx_to_document`, `find_custom_macros` | runs pandoc |
 | `compile.py` | `compile_pdf` | runs Tectonic |
 | `fix.py` | `embed_fonts` | runs Ghostscript |
+| `pandoc.py` | `read`, `blocks_to`, `markdown_to_latex` … | runs pandoc, batched |
+| `ingest.py` | `open_paper` | reads a paper into a Manuscript |
+| `texsource.py` | `ieee_author_blocks`, `bibitems`, `bib_entries`, `preamble_extras` | pure string work on LaTeX source |
+| `manuscript.py` | `Manuscript`, `Block` | dataclasses, saved as JSON |
+| `renderer.py` | `render` | Manuscript → IEEE LaTeX |
+| `analyze.py` | `analyze`, `Finding` | pure: what is missing |
+| `images.py` | `inspect`, `findings`, `ai_likelihood`, `dhash` | image forensics |
+| `project.py` | `Project` | the controller: open, edit, check, build, fit, export |
+| `ui/` | `MainWindow`, `Outline`, editors, `Panels`, `Worker` | the desktop window |
 | `main.py` | argparse command line | entry point |
-| `gui.py` | `MainWindow`, `BuildWorker`, `build_paper`, `fit_figures` | entry point |
 
 ---
 
@@ -116,7 +145,8 @@ cost the class registry promised, without the registry.
 | `Issue`, `Rules`, `Author`, `Document` | They hold data. `@dataclass` gives equality and a readable `repr`, which makes test failures easy to read. |
 | `Rules.load` (classmethod) | An alternative constructor that reads YAML and **rejects unknown keys**, so a typo in a preset fails loudly. |
 | `MainWindow(QWidget)` | Real inheritance: Qt requires it, and the window holds all its widgets as state. |
-| `BuildWorker(QThread)` | Real inheritance: runs the pipeline off the UI thread and reports back through Qt **signals**. |
+| `Worker(QThread)` | Real inheritance: runs any slow job (pandoc, Tectonic, the classifier) off the UI thread and reports back through Qt **signals**. |
+| `Project` | A real stateful object: the open paper, its folder, its last build. The window and the command line both use it. |
 | `UnreadablePdf`, `TectonicNotFound`, `PandocNotFound`, `ConversionFailed`, `GhostscriptNotFound`, `RepairFailed`, `FitFailed` | Custom exceptions, so each failure reaches the user as one clear sentence. |
 
 ---
@@ -135,16 +165,16 @@ names appear. That keeps the checks fast, deterministic and trivially testable.
 |---|---|
 | `@dataclass`, `field(default_factory=list)` | `models.py` |
 | `@classmethod` alternative constructor | `Rules.load` |
-| Inheritance from a framework class | `MainWindow(QWidget)`, `BuildWorker(QThread)` |
-| Signals and slots, worker thread | `BuildWorker.done` / `.failed` |
-| Custom exceptions, `raise ... from` | `checks.py`, `compile.py`, `convert.py`, `fix.py` |
+| Inheritance from a framework class | `MainWindow(QMainWindow)`, `Worker(QThread)`, `Outline(QTreeWidget)`, the editors (`QWidget`) |
+| Signals and slots, worker thread | `Worker.done` / `.failed`, `Editor.changed`, `Outline.chosen`, `Panels.jump` |
+| Custom exceptions, `raise ... from` | `checks.py`, `compile.py`, `pandoc.py`, `ingest.py`, `fix.py`, `fit.py` |
 | `pathlib.Path` throughout | every module |
-| `subprocess.run` with captured output | `compile.py`, `convert.py`, `fix.py`, `measure.py` |
+| `subprocess.run` with captured output | `compile.py`, `pandoc.py`, `fix.py`, `measure.py` |
 | `@property` | `Measured.width`, `Measured.text_pt` |
 | Closures | `fit_paper`'s `layout(t)` and `pages_at(t)` share its measurements |
 | Binary search | `fit_paper`, over the shrink factor `t` |
-| Regular expressions | `document.py` (headings, figure placement), `frontmatter.py` (abstract, keywords, names), `figures.py` (graphics, environments), `convert.py` (macros) |
-| Jinja2 with custom delimiters | `render.py` |
+| Regular expressions | `ingest.py` (captions, sections, abstract), `frontmatter.py` (names, markers), `texsource.py` (LaTeX source), `analyze.py` (citations, mentions), `figures.py` (graphics, environments) |
+| Jinja2 with custom delimiters | `renderer.py` |
 | `argparse` subcommands, exit codes | `main.py` |
 | Type hints | function signatures |
 | `pytest` fixtures, `tmp_path`, `monkeypatch`, `pytest-qt` | `tests/`, 160 tests |

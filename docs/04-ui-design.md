@@ -4,23 +4,24 @@ Built with **PySide6**. Three panes, one status strip, no menus deeper than one 
 
 ---
 
-## As built today
+## As built today (v1.0)
 
-![The window](images/window-clean.png)
+![The window](images/walkthrough/1-opened-missing.png)
 
 | Area | What it does |
 |---|---|
-| Top bar | **Open…** (.docx, .tex or .pdf), **Template** (IEEE Conference), **Build**, and a status line such as `6 error(s), 1 warning(s)` |
-| Left | Title, an authors table (name and affiliation, rows added with **+** and removed with **−**), and the abstract |
-| Centre | The compiled PDF, fit to width, all pages |
-| Right | The compliance list (errors in red, fixable ones marked `[can fix]`) and **Fix what can be fixed** |
+| Toolbar | **Open…** (.docx, .tex, .zip, or drop a file), **Build**, **Fit figures**, **Fix PDF**, **AI classifier** (optional install), **Export…**, and the paper's name |
+| Left: outline | Every block with a coloured tag: TITLE, AUTH, ABS, KEY, H1–H3, P, FIG n, TAB n, EQ, REF. ⚠ and a tooltip on blocks with problems |
+| Middle: editor | Title block (title, authors table, abstract, keywords); text (re-tag as paragraph, heading or quote; move, insert, delete); figure (image cards with pixels, printed dpi and AI evidence; Replace, Remove, Add; caption); table (editable cells, caption); equation; references |
+| Middle: tabs | **Missing**, **Images**, **PDF checks**, **Figure fit**, **Notes**, each with a count. Clicking a problem opens its block |
+| Right | The IEEE PDF, rebuilt 1.5 s after an edit |
 
-The build runs in a background thread, so the window stays responsive. A failed
-build shows the error in the compliance list instead of failing silently.
+When readable figures and the page limit cannot both hold, Fit figures shows
+both layouts with their page counts and smallest text size, and you choose.
+Nothing modal blocks the window; slow work runs in the background.
 
-The design below is the full target. Not built yet: the outline and editor
-panes, auto-compile on typing, the offline toggle, the expanded compliance
-panel with per-issue buttons and green ticks for passed checks, and export.
+The sections below are the original design. Still not built from it: the
+offline toggle, SyncTeX click-to-jump, and an LLM explanation panel.
 
 ---
 

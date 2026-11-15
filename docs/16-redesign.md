@@ -318,4 +318,23 @@ checked. Screenshots go in the report.
 
 ---
 
-**Previous:** [← 15 · The Figure Fitter](15-figure-fitter.md) · **Home:** [README](../README.md)
+## 10 · Status (2026-11-16): built
+
+Every step of section 9 is built and tested on the real papers.
+
+| Step | Module | Tests |
+|---|---|---|
+| 1 Ingest | `pandoc.py`, `ingest.py`, `texsource.py`, `frontmatter.py`, `manuscript.py` | `test_ingest.py` (real papers) |
+| 2 Renderer | `renderer.py`, `templates/ieee.tex.j2` | `test_renderer.py`: all real papers compile |
+| 3 Analyzer | `analyze.py` | `test_analyze.py` |
+| 4 Image forensics | `images.py` (C2PA via c2pa-python; classifier optional) | `test_images.py`, on real AI images |
+| 5 Fitter policy | `fit.py` (`readable` / `limit`), `project.py` | `test_fit.py`, `test_project.py` |
+| 6 Desktop UI | `ui/` (window, outline, editors, panels, worker, style.qss) | `test_window.py` |
+| 7 Export | `project.py` | `test_project.py`, `test_main.py` |
+| 8 Messy papers | `tools/make_messy.py`, `tests/fixtures/messy/` | `test_messy.py`, through the window |
+
+Results and measurements: [17 · Testing on Real Papers](17-real-world-testing.md).
+
+---
+
+**Previous:** [← 15 · The Figure Fitter](15-figure-fitter.md) · **Next:** [17 · Testing on Real Papers →](17-real-world-testing.md)
