@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 
 import pymupdf
 
@@ -7,15 +8,15 @@ class PdfPreview:
     def __init__(self, parent):
         self.pdf = None
         self.page = 0
-        pages = tk.Frame(parent)
-        pages.pack(fill="x")
-        self.previous = tk.Button(pages, text="Previous", command=lambda: self.draw(-1))
+        pages = ttk.Frame(parent)
+        pages.pack(fill="x", pady=(0, 6))
+        self.previous = ttk.Button(pages, text="Previous", command=lambda: self.draw(-1))
         self.previous.pack(side="left")
-        self.next = tk.Button(pages, text="Next", command=lambda: self.draw(1))
+        self.next = ttk.Button(pages, text="Next", command=lambda: self.draw(1))
         self.next.pack(side="right")
-        self.page_label = tk.Label(pages, text="PDF preview")
+        self.page_label = ttk.Label(pages, text="PDF preview", style="Section.TLabel")
         self.page_label.pack()
-        self.preview_area = tk.Canvas(parent, background="#dddddd", highlightthickness=0)
+        self.preview_area = tk.Canvas(parent, background="#e1e7ef", highlightthickness=0)
         self.preview_area.pack(fill="both", expand=True)
         self.preview_area.bind("<Configure>", lambda event: self.draw())
 

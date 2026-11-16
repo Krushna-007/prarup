@@ -2,7 +2,7 @@ import sys
 import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from tkinter import filedialog, messagebox, simpledialog
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from tkinter.scrolledtext import ScrolledText
 
 from prarup import pandoc
@@ -18,7 +18,23 @@ class MainWindow:
     def __init__(self, root):
         self.root = root
         root.title("Prarup")
-        root.geometry("1050x700")
+        width = min(1050, int(root.winfo_screenwidth() * 0.92))
+        height = min(700, int(root.winfo_screenheight() * 0.85))
+        root.geometry(f"{width}x{height}+40+30")
+        root.minsize(760, 520)
+        background = "#f2f4f7"
+        ink = "#243247"
+        root.configure(background=background)
+        style = ttk.Style(root)
+        style.theme_use("clam")
+        style.configure("TFrame", background=background)
+        style.configure("TLabel", background=background, foreground=ink)
+        style.configure("Section.TLabel", font=("Segoe UI", 11, "bold"))
+        style.configure("TButton", padding=(9, 5), background="#ffffff", foreground=ink)
+        style.map("TButton", background=[("active", "#e5ecf6")])
+        style.configure("Build.TButton", background="#2359a8", foreground="white")
+        style.map("Build.TButton", background=[("disabled", "#e1e6ee"), ("active", "#194681")],
+                  foreground=[("disabled", "#56657b"), ("!disabled", "white")])
         self.project = None
         self.rules = Rules.load(Path(__file__).resolve().parents[1] / "presets" / "ieee.yaml")
         self.worker = ThreadPoolExecutor(max_workers=1)
@@ -26,47 +42,54 @@ class MainWindow:
         self.status = tk.StringVar(root, value="Open a Word or LaTeX manuscript.")
         root.protocol("WM_DELETE_WINDOW", self.close)
 
-        bar = tk.Frame(root, padx=8, pady=8)
+        bar = ttk.Frame(root, padding=(14, 12))
         bar.pack(fill="x")
         self.buttons = []
         for label, action in [
             ("Open", self.choose_file), ("Check", self.check), ("Build PDF", self.build),
             ("Fit figures", self.fit), ("Fix PDF", self.fix), ("Export ZIP", self.export),
         ]:
-            button = tk.Button(bar, text=label, command=action)
+            style_name = "Build.TButton" if label == "Build PDF" else "TButton"
+            button = ttk.Button(bar, text=label, command=action, style=style_name)
             button.pack(side="left", padx=(0, 5))
             self.buttons.append(button)
 
-        tk.Label(root, textvariable=self.status, anchor="w", padx=8).pack(side="bottom", fill="x")
-        panes = tk.PanedWindow(root, sashwidth=6)
-        panes.pack(fill="both", expand=True, padx=8, pady=(0, 8))
-        left = tk.Frame(panes)
-        right = tk.Frame(panes)
-        panes.add(left, width=460, minsize=300)
+        ttk.Label(root, textvariable=self.status, anchor="w", padding=(14, 8)).pack(side="bottom", fill="x")
+        panes = tk.PanedWindow(root, sashwidth=10, background=background, borderwidth=0)
+        panes.pack(fill="both", expand=True, padx=14)
+        left = ttk.Frame(panes, padding=(0, 0, 6, 0))
+        right = ttk.Frame(panes)
+        panes.add(left, width=462, minsize=400)
         panes.add(right, minsize=300)
 
-        tk.Label(left, text="Manuscript").pack(anchor="w")
-        outline = tk.Frame(left)
+        ttk.Label(left, text="Manuscript", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
+        outline = ttk.Frame(left)
         outline.pack(fill="x")
-        scroll = tk.Scrollbar(outline)
+        scroll = ttk.Scrollbar(outline)
         scroll.pack(side="right", fill="y")
-        self.outline = tk.Listbox(outline, height=9, yscrollcommand=scroll.set, exportselection=False)
+        self.outline = tk.Listbox(outline, height=9, yscrollcommand=scroll.set, exportselection=False,
+                                  foreground=ink, selectbackground="#2359a8", selectforeground="white",
+                                  borderwidth=0, highlightthickness=1, highlightbackground="#ccd5e1",
+                                  highlightcolor="#2359a8", activestyle="none")
         self.outline.pack(fill="x")
         scroll.config(command=self.outline.yview)
         self.outline.bind("<Double-Button-1>", lambda event: self.edit())
-        actions = tk.Frame(left)
-        actions.pack(fill="x", pady=5)
+        actions = ttk.Frame(left)
+        actions.pack(fill="x", pady=(7, 12))
         for label, command in [
             ("Edit", self.edit), ("Image", self.image), ("Add", self.add),
             ("Up", lambda: self.move(-1)), ("Down", lambda: self.move(1)),
             ("Delete", self.delete),
         ]:
-            button = tk.Button(actions, text=label, command=command)
-            button.pack(side="left")
+            button = ttk.Button(actions, text=label, command=command, width=7)
+            button.pack(side="left", padx=(0, 3))
             self.buttons.append(button)
 
-        tk.Label(left, text="Report").pack(anchor="w")
-        self.report = ScrolledText(left, wrap="word", height=12, state="disabled")
+        ttk.Label(left, text="Report", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
+        self.report = ScrolledText(left, wrap="word", height=12, state="disabled", foreground=ink,
+                                   background="white", borderwidth=0, highlightthickness=1,
+                                   highlightbackground="#ccd5e1", padx=10, pady=8,
+                                   font=("Segoe UI", 10))
         self.report.pack(fill="both", expand=True)
         self.preview = PdfPreview(right)
         self.enable()
