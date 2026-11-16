@@ -1,11 +1,3 @@
-"""Opening real papers.
-
-The three Word papers are real (see fixtures/real/ATTRIBUTION.md). The
-LaTeX project is ours, written to contain every construct that broke an
-earlier Prarup on a real arXiv paper. Expected values were read from the
-papers by hand.
-"""
-
 import shutil
 from pathlib import Path
 
@@ -41,8 +33,6 @@ def latex(tmp_path_factory):
     return open_paper(LATEX / "main.tex", project), project
 
 
-# ---------------------------------------------------------------- front matter
-
 def test_yolo_front_matter_skips_the_label_line(yolo):
     assert yolo.title.startswith("YOLO-Based Object Detection and Player Tracking")
     assert [a.name for a in yolo.authors] == ["Dipto Roy"]
@@ -74,8 +64,6 @@ def test_latex_ieee_author_blocks_with_markers(latex):
     assert m.abstract == "We study federated learning on UAV swarms and show a 12% gain."
 
 
-# ---------------------------------------------------------------- structure
-
 def test_uncaptioned_word_figures_are_figures_with_no_caption(yolo):
     figures = yolo.figures()
     assert len(figures) == 3
@@ -96,8 +84,8 @@ def test_caption_with_no_image_becomes_a_figure_without_one(svm):
 
 def test_table_captions_before_and_after_their_tables(svm):
     captions = [t.caption for t in svm.tables()]
-    assert "Attributes of dataset" in captions                     # written before the table
-    assert "Comparison between this study and previous studies" in captions   # after it
+    assert "Attributes of dataset" in captions
+    assert "Comparison between this study and previous studies" in captions
 
 
 def test_sub_images_join_the_figure_captioned_together(uav):
@@ -139,14 +127,14 @@ def test_latex_images_are_copied_and_case_mismatch_is_noted(latex):
     assert acc.images == ["media/accuracy.png"] and (project / "media" / "accuracy.png").exists()
     assert acc.label == "fig:acc"
     assert any("breaks on Linux" in n for n in m.notes)
-    assert missing.images == ["figs/missing_plot"]          # left as written: it is missing
+    assert missing.images == ["figs/missing_plot"]
 
 
 def test_author_macros_are_carried_over_safely(latex):
     m, _ = latex
     assert r"\usepackage{dsfont}" in m.preamble
     assert r"\providecommand{\E}{\mathds{E}}" in m.preamble
-    assert "inputenc" not in m.preamble                     # pdfLaTeX-only, XeTeX refuses it
+    assert "inputenc" not in m.preamble
 
 
 def test_manuscript_survives_a_save_and_load(latex, tmp_path):

@@ -1,4 +1,4 @@
-# 11 · Compliance Rules
+# Compliance rules
 
 The rule catalogue. For each check: how it is detected, whether it can be
 repaired automatically, and where it cannot, what the author has to do.
@@ -17,12 +17,12 @@ repaired automatically, and where it cannot, what the author has to do.
 
 These run on the compiled PDF and live in `prarup/checks.py`. Build also
 reports **GEOM-03**: a figure whose text prints below the readable minimum
-(7 pt), measured in the same compile ([15 · The Figure Fitter](15-figure-fitter.md)).
+(7 pt), measured in the same compile ([Figure fitting](figure-fitting.md)).
 
 ## Before the PDF: what is missing (`analyze.py`)
 
 Found from the paper's structure, before anything is compiled. Each finding
-names its block, and clicking it in the window opens that block.
+identifies the item to review in the manuscript outline.
 
 | Code | Finding | Severity |
 |---|---|---|
@@ -47,14 +47,8 @@ names its block, and clicking it in the window opens that block.
 | Code | Finding | Severity |
 |---|---|---|
 | IMG-01 | Printed resolution under 300 dpi (pixels ÷ printed inches) | Warning |
-| IMG-02 | Declared AI-generated: a C2PA manifest or IPTC `trainedAlgorithmicMedia` | Error |
-| IMG-03 | AI generator traces: Stable Diffusion settings, a ComfyUI workflow, a generator named | Warning |
-| IMG-04 | The optional classifier rates a photo-like image at least 80% likely AI | Warning |
 | IMG-05 | The same image as another figure (difference hash, survives resizing) | Warning |
 | IMG-06 | The image cannot be read | Warning |
-
-How the AI layers were measured on real images is in
-[17 · Testing on Real Papers](17-real-world-testing.md).
 
 ---
 
@@ -227,7 +221,7 @@ column. The IEEE template records the column and text widths in the PDF's
 document info; the check compares every image with them. A `figure*` centred
 over the whole text block is wide on purpose and not reported. PDFs Prarup did
 not build carry no widths, so the check stays quiet on them. The repair is the
-figure fitter: [15 · The Figure Fitter](15-figure-fitter.md).
+figure fitter: [Figure fitting](figure-fitting.md).
 
 ### Not built: GEOM-03 text margins, STRUCT-01 caption placement
 
@@ -248,7 +242,7 @@ document model rather than LaTeX text. Both are future work.
 
 ## Test fixtures
 
-`tools/make_fixtures.py` generates them into `tests/fixtures/`:
+The test fixtures are stored in `tests/fixtures/`.
 
 | File | Purpose |
 |---|---|
@@ -264,5 +258,3 @@ we detect the real failure and that we do not flag the corrected file. Bookmark
 and image-quality fixtures are built inside their tests with `tmp_path`.
 
 ---
-
-**Previous:** [← 10 · Toolchain](10-toolchain.md) · **Next:** [12 · Implementation Notes →](12-implementation-notes.md)

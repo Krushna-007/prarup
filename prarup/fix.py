@@ -1,27 +1,17 @@
-"""Automatic repairs.
-
-Only repairs that are unambiguous belong here. Anything that changes what
-the paper says is the author's decision, not ours.
-"""
-
-import shutil
-import subprocess
+import sys
 from pathlib import Path
+
+from prarup.process import find_tool, run_tool
 
 
 class GhostscriptNotFound(Exception):
-    """Raised when the gs binary is not on PATH."""
+    pass
 
 
 class RepairFailed(Exception):
-    """Raised when Ghostscript runs but produces nothing usable."""
+    pass
 
 
-# Fonts are the only thing this repair is for. /prepress is what makes
-# Ghostscript embed Helvetica and the other base-14 fonts, but it also
-# downsamples images to 300 dpi and re-encodes lossless ones as JPEG,
-# which quietly lowers figure quality. These flags come after it and
-# override just the image settings.
 KEEP_IMAGES = [
     "-dDownsampleColorImages=false",
     "-dDownsampleGrayImages=false",
@@ -35,28 +25,30 @@ KEEP_IMAGES = [
 ]
 
 
-def embed_fonts(pdf_path: Path, out_path: Path) -> Path:
-    """Rewrite a PDF with every referenced font embedded.
+def find_ghostscript():
+    for name in ("gs", "gswin64c", "gswin32c"):
+        command = find_tool(name)
+        if command:
+            return command
+    local = Path(sys.prefix) / "ghostscript" / "bin" / "gswin64c.exe"
+    if sys.platform == "win32" and local.is_file():
+        return str(local)
+    return None
 
-    This repairs FONT-01 and nothing else. Ghostscript cannot convert a
-    Type3 bitmap font into outlines, and it cannot invent a font that is
-    missing from the system entirely. In both cases it exits zero and
-    returns a file that still fails, which is why the caller must re-run
-    the check rather than trusting the exit code.
-    """
-    if shutil.which("gs") is None:
-        raise GhostscriptNotFound(
-            "ghostscript is not installed. Install it with: brew install ghostscript"
-        )
+
+def embed_fonts(pdf_path: Path, out_path: Path) -> Path:
+    ghostscript = find_ghostscript()
+    if not ghostscript:
+        raise GhostscriptNotFound("Ghostscript is not on PATH.")
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    result = subprocess.run(
+    result = run_tool(
         [
-            "gs",
+            ghostscript,
             "-dNOPAUSE", "-dBATCH", "-dSAFER", "-dQUIET",
             "-sDEVICE=pdfwrite",
-            "-dPDFSETTINGS=/prepress",    # needed: the default never embeds the base-14 fonts
+            "-dPDFSETTINGS=/prepress",
             "-dEmbedAllFonts=true",
             "-dSubsetFonts=true",
             "-dMaxSubsetPct=100",
@@ -64,8 +56,7 @@ def embed_fonts(pdf_path: Path, out_path: Path) -> Path:
             f"-sOutputFile={out_path}",
             str(pdf_path),
         ],
-        capture_output=True,
-        text=True,
+        errors="replace",
     )
 
     if result.returncode != 0 or not out_path.exists():

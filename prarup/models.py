@@ -1,6 +1,4 @@
-"""Plain data holders. These classes hold values and do nothing else."""
-
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 from pathlib import Path
 
 import yaml
@@ -8,34 +6,22 @@ import yaml
 
 @dataclass
 class Issue:
-    """One problem found in a compiled PDF."""
-
-    code: str           # short identifier, e.g. "FONT-01"
-    message: str        # what to show the user
-    severity: str       # "error" or "warning"
-    can_fix: bool = False   # True when we can repair it automatically
+    code: str
+    message: str
+    severity: str
+    can_fix: bool = False
 
 
 @dataclass
 class Rules:
-    """What the target conference requires.
-
-    Loaded from a YAML file so a new conference is a data change rather
-    than a code change.
-    """
-
     page_limit: int = 6
     columns: int = 2
     body_font_pt: float = 10.0
-    # Smallest printed text allowed inside a figure. Our choice, not an
-    # IEEE rule, set just under IEEE's 8 pt footnotes. Note that a default
-    # matplotlib figure (6.4 in wide, 10 pt text) printed one column wide
-    # carries 5.5 pt text, so it fails this unless drawn smaller.
+
     min_figure_text_pt: float = 7.0
 
     @classmethod
     def load(cls, path: Path) -> "Rules":
-        """Read a rules file. Unknown keys raise, so typos are loud."""
         data = yaml.safe_load(Path(path).read_text()) or {}
 
         known = {f.name for f in fields(cls)}
@@ -51,66 +37,34 @@ class Rules:
 
 @dataclass
 class Author:
-    """One author and where they work."""
-
     name: str
     affiliation: str = ""
 
 
 @dataclass
-class Document:
-    """A manuscript, independent of the file it came from.
-
-    body holds LaTeX rather than a parsed section tree. Parsing LaTeX into
-    a full structure is a large job on its own and buys us nothing here:
-    every input path already produces LaTeX, and the template only needs
-    to wrap it. Title, authors and abstract are pulled out separately
-    because IEEEtran needs them in specific commands.
-    """
-
-    title: str = ""
-    authors: list = field(default_factory=list)
-    abstract: str = ""
-    keywords: str = ""
-    body: str = ""
-    bibliography: str = ""
-    figures: list = field(default_factory=list)
-
-
-@dataclass
 class Graphic:
-    """One \\includegraphics in a LaTeX source, and where it sits."""
-
-    index: int          # 1-based, in source order
-    start: int          # span of the whole \includegraphics[...]{...}
+    index: int
+    start: int
     end: int
-    options: str        # text between the square brackets, "" if none
+    options: str
     path: str
-    env: str = ""       # "figure", "figure*", or "" when not in a float
-    env_begin: tuple = (0, 0)   # span of \begin{figure} or \begin{figure*}
-    env_end: tuple = (0, 0)     # span of the matching \end{...}
-    reason: str = ""    # why it must not be resized; "" when it may be
+    env: str = ""
+    env_begin: tuple = (0, 0)
+    env_end: tuple = (0, 0)
+    reason: str = ""
 
 
 @dataclass
 class Measured:
-    """Where one graphic landed in the compiled PDF, and how it reads.
-
-    text_per_width is the printed size of the figure's small text, in
-    points, per point of figure width. Text scales with the figure, so
-    this one number predicts the text size at any width. None when no
-    text could be measured.
-    """
-
     index: int
-    page: int                   # 1-based
+    page: int
     x0: float
     y0: float
     x1: float
     y1: float
-    overflow: float = 0.0       # points past the column (or text block)
+    overflow: float = 0.0
     text_per_width: float | None = None
-    text_source: str = ""       # "vector" or "ocr"
+    text_source: str = ""
 
     @property
     def width(self) -> float:
@@ -123,15 +77,12 @@ class Measured:
 
 @dataclass
 class Geometry:
-    """Page layout as LaTeX itself reported it, in points."""
-
     column: float
     text: float
     left: float
     gap: float
 
     def bounds(self, x0: float, double: bool) -> tuple[float, float]:
-        """The horizontal space a figure starting at x0 is allowed to use."""
         if double or self.column >= self.text:
             return self.left, self.left + self.text
         if x0 < self.left + self.column:
@@ -141,25 +92,21 @@ class Geometry:
 
 @dataclass
 class FigureChange:
-    """What the fitter did to one graphic, for the report."""
-
     index: int
     page: int
-    width_before: float          # points, as printed
+    width_before: float
     width_after: float
-    double_before: bool          # spans both columns
+    double_before: bool
     double_after: bool
     overflow_before: float
-    text_before: float | None    # printed size of the small text, points
+    text_before: float | None
     text_after: float | None
-    note: str = ""               # why it was left alone, or what to do
-    name: str = ""               # how the report names it, e.g. "Fig. 3"; default "Fig. <index>"
+    note: str = ""
+    name: str = ""
 
 
 @dataclass
 class FitReport:
-    """The outcome of fitting one paper."""
-
     changes: list
     pages_before: int
     pages_after: int
@@ -167,5 +114,5 @@ class FitReport:
     fitted_tex: Path | None = None
     pdf: Path | None = None
     summary: str = ""
-    policy: str = "readable"      # or "limit"
+    policy: str = "readable"
     min_pt: float = 7.0

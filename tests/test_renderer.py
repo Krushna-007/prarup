@@ -1,9 +1,3 @@
-"""Writing a Manuscript as an IEEE paper, and compiling it.
-
-Every real paper must compile, and the PDF must carry what the source had.
-Before the redesign, none of the three Word papers compiled.
-"""
-
 import shutil
 from pathlib import Path
 
@@ -26,10 +20,10 @@ needs_tools = pytest.mark.skipif(
 def build(source: Path, project: Path):
     m = open_paper(source, project)
     tex = project / "paper.tex"
-    tex.write_text(render(m, project))
+    tex.write_text(render(m, project), encoding="utf-8")
     pdf, log = compile_pdf(tex, project / "build")
     assert pdf.exists(), log[-2000:]
-    return m, tex.read_text(), pymupdf.open(pdf)
+    return m, tex.read_text(encoding="utf-8"), pymupdf.open(pdf)
 
 
 @needs_tools
@@ -38,7 +32,7 @@ def test_every_real_word_paper_compiles(name, tmp_path):
     m, tex, pdf = build(REAL / f"{name}.docx", tmp_path)
     text = " ".join(page.get_text() for page in pdf)
     assert " ".join(m.title.split()[:4]) in " ".join(text.split())
-    assert "longtable" not in tex                    # illegal in two columns
+    assert "longtable" not in tex
 
 
 @needs_tools
@@ -77,7 +71,7 @@ def test_align_inside_display_maths_is_unwrapped_and_keeps_its_label():
     out = _unwrap_environments(latex)
     assert not out.startswith("\\[")
     assert out.count("\\label") == 2
-    assert "c &= d\\label{eq:b}" in out           # on the line without a label
+    assert "c &= d\\label{eq:b}" in out
 
 
 def test_long_affiliations_break_at_commas():

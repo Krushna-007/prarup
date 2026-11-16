@@ -1,8 +1,3 @@
-"""Reading authors and affiliations, and plain text from LaTeX.
-
-Whole papers are tested in test_ingest.py; these are the layouts one at a time.
-"""
-
 from prarup.frontmatter import latex_to_plain
 from prarup.models import Author
 
@@ -15,11 +10,7 @@ def test_latex_to_plain_reads_pandocs_escapes_for_caret_and_tilde():
     assert latex_to_plain(r"(x\^{}2) and 5\textasciitilde{}10 and a~b") == "(x^2) and 5~10 and a b"
 
 
-# ---------------------------------------------------------------- real layouts
-# Each case is copied from one of the real Word papers in tests/fixtures/real.
-
 def test_label_line_name_affiliation_with_commas_and_email():
-    """YOLO football paper (Zenodo 16929566)."""
     from prarup.frontmatter import title_and_authors
 
     title, authors = title_and_authors([
@@ -34,7 +25,6 @@ def test_label_line_name_affiliation_with_commas_and_email():
 
 
 def test_superscript_markers_tie_authors_to_numbered_affiliations():
-    """UAV imagery paper (Zenodo 11105119)."""
     from prarup.frontmatter import read_authors
 
     authors = read_authors([
@@ -51,7 +41,6 @@ def test_superscript_markers_tie_authors_to_numbered_affiliations():
 
 
 def test_one_name_then_affiliation_lines():
-    """SVM diabetes paper (Zenodo 6975670)."""
     from prarup.frontmatter import read_authors
 
     authors = read_authors(["Renas Rajab Asaad",
@@ -64,7 +53,6 @@ def test_one_name_then_affiliation_lines():
 
 
 def test_ieee_block_several_names_share_one_affiliation():
-    """arXiv 2402.05973's \\IEEEauthorblockN / \\IEEEauthorblockA."""
     from prarup.frontmatter import read_authors
 
     authors = read_authors(["Sana Hafeez, Lina Mohjazi, Muhammad Ali Imran and Yao Sun\n"

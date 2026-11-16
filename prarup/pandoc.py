@@ -1,44 +1,31 @@
-"""Talk to pandoc through its JSON document tree.
-
-pandoc reads Word and LaTeX into the same tree, which is what lets one
-editor and one checker serve both. Conversions are batched: many pieces
-go through a single pandoc run, separated by a marker paragraph, because
-one run per block would take seconds on a real paper.
-"""
-
 import json
 import re
-import shutil
-import subprocess
 from pathlib import Path
+
+from prarup.process import find_tool, run_tool
 
 SEPARATOR = "PRARUPSEPARATOR"
 
 
 class PandocNotFound(Exception):
-    """Raised when the pandoc binary is not on PATH."""
+    pass
 
 
 class PandocFailed(Exception):
-    """Raised when pandoc runs but cannot read or write the document."""
+    pass
 
 
 def _run(args: list[str], cwd: Path | None = None, stdin: str | None = None) -> str:
-    if shutil.which("pandoc") is None:
-        raise PandocNotFound("pandoc is not installed. Install it with: brew install pandoc")
-    result = subprocess.run(["pandoc", *args], cwd=cwd, input=stdin,
-                            capture_output=True, text=True)
+    pandoc = find_tool("pandoc")
+    if not pandoc:
+        raise PandocNotFound("pandoc is not installed or is missing from PATH.")
+    result = run_tool([pandoc, *args], cwd=cwd, input=stdin)
     if result.returncode != 0:
         raise PandocFailed(result.stderr.strip() or "pandoc failed")
     return result.stdout
 
 
 def read(path: Path, media_dir: Path | None = None) -> dict:
-    """Read a .docx or .tex into pandoc's JSON tree.
-
-    For a .docx, images are written into media_dir/media/. A .tex is read
-    from its own folder so \\input files and relative image paths resolve.
-    """
     path = Path(path).resolve()
     fmt = "docx" if path.suffix.lower() == ".docx" else "latex"
     args = [str(path), "-f", fmt, "-t", "json"]
@@ -51,8 +38,15 @@ def read(path: Path, media_dir: Path | None = None) -> dict:
 _BLOCKS = {"Para", "Plain", "Header", "BlockQuote", "CodeBlock", "LineBlock"}
 
 
+def table_rows(table):
+    _, _, _, head, bodies, foot = table["c"]
+    rows = list(head[1])
+    for body in bodies:
+        rows += body[2] + body[3]
+    return rows + foot[1], len(head[1])
+
+
 def stringify(node) -> str:
-    """Plain text of any pandoc node or list of nodes."""
     out = []
 
     def walk(n):
@@ -72,7 +66,7 @@ def stringify(node) -> str:
                 pass
             elif kind in _BLOCKS:
                 walk(n.get("c"))
-                out.append("\n")             # keep table cells and paragraphs apart
+                out.append("\n")
             elif kind == "Quoted":
                 out.append("“")
                 walk(n["c"][1])
@@ -88,8 +82,7 @@ def stringify(node) -> str:
                      if line.strip()).strip()
 
 
-def _batch(pieces: list[list], api: list, to: str, extra: list[str] = ()) -> list[str]:
-    """Convert lists of blocks, all in one pandoc run."""
+def blocks_to(pieces: list[list], api: list, to: str) -> list[str]:
     if not pieces:
         return []
     blocks = []
@@ -97,23 +90,12 @@ def _batch(pieces: list[list], api: list, to: str, extra: list[str] = ()) -> lis
         blocks += piece
         blocks.append({"t": "Para", "c": [{"t": "Str", "c": SEPARATOR}]})
     doc = {"pandoc-api-version": api, "meta": {}, "blocks": blocks}
-    text = _run(["-f", "json", "-t", to, "--wrap=none", *extra], stdin=json.dumps(doc))
+    text = _run(["-f", "json", "-t", to, "--wrap=none"], stdin=json.dumps(doc))
     parts = text.split(SEPARATOR)
     return [p.strip() for p in parts[:len(pieces)]]
 
 
-def blocks_to(pieces: list[list], api: list, to: str, extra: list[str] = ()) -> list[str]:
-    """Each list of blocks as text in format `to` (markdown, latex, plain)."""
-    return _batch(pieces, api, to, extra)
-
-
-def inlines_to(pieces: list[list], api: list, to: str, extra: list[str] = ()) -> list[str]:
-    """Each list of inlines (a caption, a title) as text in format `to`."""
-    return _batch([[{"t": "Plain", "c": p}] for p in pieces], api, to, extra)
-
-
-def markdown_to_blocks(texts: list[str], api: list) -> list[list]:
-    """Parse edited Markdown back into pandoc blocks, one list per text."""
+def markdown_to_blocks(texts: list[str]) -> list[list]:
     if not texts:
         return []
     source = f"\n\n{SEPARATOR}\n\n".join(texts)
@@ -130,16 +112,11 @@ def markdown_to_blocks(texts: list[str], api: list) -> list[list]:
 
 
 def _one_line(text: str) -> str:
-    """A caption or title as one paragraph: "a. Results" must not become a list."""
     text = re.sub(r"^([-*+#>])", r"\\\1", " ".join(text.split()))
     return re.sub(r"^([A-Za-z0-9]{1,3})([.)])(\s)", r"\1\\\2\3", text)
 
 
 def markdown_to_latex(texts: list[str]) -> list[str]:
-    """Convert short Markdown texts (captions, titles) to LaTeX in one run.
-
-    Empty texts stay empty: the template leaves out an empty abstract.
-    """
     filled = [t for t in texts if t.strip()]
     if not filled:
         return ["" for _ in texts]
@@ -150,7 +127,6 @@ def markdown_to_latex(texts: list[str]) -> list[str]:
 
 
 def latex_to_markdown(texts: list[str]) -> list[str]:
-    """Convert LaTeX snippets (bibliography entries) to Markdown in one run."""
     if not texts:
         return []
     source = f"\n\n{SEPARATOR}\n\n".join(texts)

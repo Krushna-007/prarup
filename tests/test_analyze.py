@@ -1,6 +1,3 @@
-"""Missing-data findings on real papers. Each expected finding was checked by
-searching the paper's own text (e.g. the SVM paper never mentions Fig. 2)."""
-
 import shutil
 from pathlib import Path
 
@@ -21,14 +18,14 @@ def findings(source, tmp_path):
 def test_yolo_uncaptioned_figures_and_tables(tmp_path):
     codes = [c for c, _ in findings(FIX / "real" / "yolo_football.docx", tmp_path)]
     assert codes.count("FIG-01") == 3 and codes.count("TAB-01") == 2
-    assert "STR-01" not in codes          # "Introduction:" and "Conclusion:" are sections
+    assert "STR-01" not in codes
 
 
 def test_svm_real_gaps_only(tmp_path):
     found = findings(FIX / "real" / "svm_diabetes.docx", tmp_path)
     assert ("FIG-03", "Fig. 1 has a caption but no image.") in found
     assert ("FIG-02", "Fig. 2 is never mentioned in the text.") in found
-    assert not any(c == "TAB-02" and "Table 1 " in msg for c, msg in found)   # cited as "Table I"
+    assert not any(c == "TAB-02" and "Table 1 " in msg for c, msg in found)
     assert not any(c == "STR-02" for c, _ in found)
 
 

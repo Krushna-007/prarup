@@ -1,14 +1,3 @@
-"""Write a Manuscript as an IEEE conference paper in LaTeX.
-
-Prarup writes the figures, tables, equations, headings and references
-itself, so it controls exactly what LaTeX receives: a table becomes a
-plain tabular (pandoc's longtable cannot be used in two columns), a
-missing image becomes a visible placeholder rather than a crash. Running
-text goes through pandoc, untouched unless the user edited it.
-
-Every pandoc conversion is batched into a few runs.
-"""
-
 import re
 from pathlib import Path
 
@@ -35,12 +24,10 @@ def _env() -> jinja2.Environment:
 
 
 def _plain_heading(markdown: str) -> str:
-    """Heading text without Word's own numbering: IEEE numbers sections itself."""
     return _NUMBERING.sub("", markdown.replace("\\.", ".")).strip()
 
 
 def _flatten_tables(blocks: list) -> list:
-    """A table inside a table cell becomes its text: tabular cannot nest a longtable."""
     out = []
     for b in blocks:
         if b.get("t") == "Table":
@@ -51,8 +38,6 @@ def _flatten_tables(blocks: list) -> list:
 
 
 def _bounded(blocks: list) -> list:
-    """Images inside running text lose Word's fixed size, so pandoc scales them
-    to fit the column instead of running across the next one."""
     import copy
     blocks = copy.deepcopy(blocks)
 
@@ -70,32 +55,27 @@ def _bounded(blocks: list) -> list:
 
 
 def _cells(table: dict) -> list[list[tuple]]:
-    """Rows of (alignment, colspan, blocks) from a pandoc Table node."""
-    _, _, _, head, bodies, foot = table["c"]
-    rows = list(head[1])
-    for body in bodies:
-        rows += body[2] + body[3]
-    rows += foot[1]
-    return [[(cell[1]["t"], cell[3], cell[4]) for cell in row[1]] for row in rows], len(head[1])
+    rows, header_count = pandoc.table_rows(table)
+    cells = [[(cell[1]["t"], cell[3], cell[4]) for cell in row[1]] for row in rows]
+    return cells, header_count
 
 
 def _table_latex(block, caption: str, rows: list, header_rows: int,
                  cell_latex: dict, columns: list) -> str:
     width = max((sum(span for _, span, _ in r) for r in rows), default=1)
-    longest = [0] * width                    # characters in each column's longest cell
+    longest = [0] * width
     for r in rows:
         col = 0
         for n, (_, span, _) in enumerate(r):
             if span == 1 and col < width:
                 longest[col] = max(longest[col], len(re.sub(r"\\[a-z]+|[{}]", "", cell_latex.get((id(r), n), ""))))
             col += span
-    # Footnote-size text runs about 4.5 pt per character. A table wider than
-    # its column wraps its text columns; much wider, it spans both columns.
+
     natural = sum(min(n, 60) for n in longest) * 4.5 + 12 * width
     double = natural > 252 * 1.6
     wrap_text = natural > 252 * 0.95
     long_cols = {c for c, n in enumerate(longest) if wrap_text and n > 10}
-    wrap = r">{\raggedright\arraybackslash}X"           # long text wraps instead of overflowing
+    wrap = r">{\raggedright\arraybackslash}X"
     spec = "".join(wrap if c in long_cols else (columns[c] if c < len(columns) else "l")
                    for c in range(width))
     span_width = r"\textwidth" if double else r"\columnwidth"
@@ -158,12 +138,10 @@ def _references_latex(m: Manuscript, block, entries_latex: list[str]) -> str:
 
 
 def body_latex(m: Manuscript, project: Path) -> str:
-    """The paper's body as LaTeX, ready for the template."""
-    # 1. everything that needs pandoc, collected for batched runs
     edited = [b for b in m.blocks if b.edited and b.kind in ("para", "quote", "list", "code")]
     parsed = dict(zip((b.id for b in edited),
-                      pandoc.markdown_to_blocks([b.text for b in edited], m.api)))
-    short = []        # headings, captions and reference entries: Markdown -> LaTeX
+                      pandoc.markdown_to_blocks([b.text for b in edited])))
+    short = []
     for b in m.blocks:
         if b.kind == "heading":
             short.append(_plain_heading(b.text))
@@ -185,7 +163,6 @@ def body_latex(m: Manuscript, project: Path) -> str:
                 cell_keys.append((id(r), n))
     cell_latex = dict(zip(cell_keys, pandoc.blocks_to(cell_pieces, m.api, "latex")))
 
-    # 2. assemble, with our own LaTeX for structured blocks
     out = []
     for b in m.blocks:
         if b.kind == "heading":
@@ -225,11 +202,6 @@ _WRAPPED = re.compile(r"\\\[\s*((?:\\label\{[^}]*\}\s*)?)"
 
 
 def _unwrap_environments(latex: str) -> str:
-    """pandoc puts an align written inside a paragraph in \\[ ... \\]; LaTeX refuses the nesting.
-
-    A \\label written before the align moves inside it, onto the first of
-    its lines that has no label of its own (amsmath allows one per line).
-    """
     def place(m: re.Match) -> str:
         label, body = m.group(1).strip(), m.group(5)
         if label:
@@ -243,7 +215,6 @@ def _unwrap_environments(latex: str) -> str:
 
 
 def _lines(affiliation: str, width: int = 45) -> str:
-    """Break a long affiliation at its commas into lines, as IEEE author blocks do."""
     if len(affiliation) <= width:
         return affiliation
     lines, current = [], ""
@@ -258,7 +229,6 @@ def _lines(affiliation: str, width: int = 45) -> str:
 
 
 def render(m: Manuscript, project: Path, template: str = "ieee") -> str:
-    """The complete .tex for the paper."""
     front = pandoc.markdown_to_latex(
         [m.title, m.abstract, m.keywords] + [x for a in m.authors for x in (a.name, a.affiliation)])
     title, abstract, keywords, people = front[0], front[1], front[2], front[3:]

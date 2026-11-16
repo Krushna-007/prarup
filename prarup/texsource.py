@@ -1,12 +1,3 @@
-"""What pandoc misses in a LaTeX paper, read from the source itself.
-
-pandoc returns an empty author for IEEE's \\IEEEauthorblockN blocks and
-merges an inline bibliography into one paragraph, losing every key. Both
-are simple to read from the source, following \\input and \\include.
-
-Pure apart from reading the paper's own files.
-"""
-
 import re
 from pathlib import Path
 
@@ -15,13 +6,12 @@ _COMMENT = re.compile(r"(?<!\\)%[^\n]*")
 
 
 def full_source(main: Path, seen: set | None = None) -> str:
-    """The main file with every \\input and \\include inlined, comments removed."""
     seen = seen if seen is not None else set()
     main = main.resolve()
     if main in seen or not main.is_file():
         return ""
     seen.add(main)
-    text = _COMMENT.sub("", main.read_text(errors="replace"))
+    text = _COMMENT.sub("", main.read_text(encoding="utf-8", errors="replace"))
 
     def inline(match: re.Match) -> str:
         name = match.group(1).strip()
@@ -34,7 +24,6 @@ def full_source(main: Path, seen: set | None = None) -> str:
 
 
 def _group(text: str, start: int) -> tuple[str, int]:
-    """The brace group starting at text[start] == '{', and the index after it."""
     depth = 0
     for i in range(start, len(text)):
         if text[i] == "{":
@@ -47,7 +36,6 @@ def _group(text: str, start: int) -> tuple[str, int]:
 
 
 def _command_args(text: str, command: str) -> list[str]:
-    """Every argument of \\command{...}, braces balanced."""
     found = []
     for m in re.finditer(r"\\" + command + r"\s*(?=\{)", text):
         arg, _ = _group(text, m.end())
@@ -56,10 +44,6 @@ def _command_args(text: str, command: str) -> list[str]:
 
 
 def ieee_author_blocks(source: str) -> list[tuple[str, str]]:
-    """[(names, affiliation lines)] from \\IEEEauthorblockN / \\IEEEauthorblockA.
-
-    Both are LaTeX; the caller turns them into plain text.
-    """
     authors = _command_args(source, "author")
     if not authors:
         return []
@@ -71,7 +55,6 @@ def ieee_author_blocks(source: str) -> list[tuple[str, str]]:
 
 
 def bibitems(source: str) -> list[tuple[str, str]]:
-    """[(key, LaTeX text)] for every \\bibitem in the source or a .bbl."""
     body = re.search(r"\\begin\{thebibliography\}(?:\{[^}]*\})?(.*?)\\end\{thebibliography\}",
                      source, re.S)
     if not body:
@@ -86,12 +69,10 @@ def bibitems(source: str) -> list[tuple[str, str]]:
 
 
 def bib_keys(bib_text: str) -> list[str]:
-    """Entry keys in a .bib file, in order."""
     return re.findall(r"@\w+\s*\{\s*([^,\s]+)\s*,", bib_text)
 
 
 def bibliography_files(source: str) -> list[str]:
-    """Names given to \\bibliography{a,b}."""
     names = []
     for arg in _command_args(source, "bibliography"):
         names += [n.strip() for n in arg.split(",") if n.strip()]
@@ -99,7 +80,6 @@ def bibliography_files(source: str) -> list[str]:
 
 
 def bib_entries(bib_text: str) -> list[tuple[str, dict]]:
-    """[(key, {field: LaTeX value})] for every entry in a .bib file."""
     entries = []
     for m in re.finditer(r"@(\w+)\s*\{\s*([^,\s]+)\s*,", bib_text):
         if m.group(1).lower() in ("comment", "string", "preamble"):
@@ -120,15 +100,12 @@ def bib_entries(bib_text: str) -> list[tuple[str, dict]]:
 
 
 def describe_entry(fields: dict) -> str:
-    """One readable line for a .bib entry: authors, title, venue, year."""
     venue = fields.get("journal") or fields.get("booktitle") or fields.get("publisher", "")
     parts = [fields.get("author", "").replace(" and ", ", "), f"``{fields.get('title', '')}''",
              f"\\emph{{{venue}}}" if venue else "", fields.get("year", "")]
     return ", ".join(p for p in parts if p and p != "``''") + "."
 
 
-# Packages an IEEE paper may need for its maths, symbols and algorithms.
-# Anything that changes page layout or fonts is left out on purpose.
 SAFE_PACKAGES = {
     "amsmath", "amssymb", "amsfonts", "amsthm", "bm", "mathrsfs", "mathtools", "dsfont",
     "bbm", "bbold", "nccmath", "siunitx", "xspace", "algorithm", "algorithmic",
@@ -141,11 +118,6 @@ _DEFINITIONS = re.compile(r"\\(newcommand|renewcommand|providecommand|DeclareMat
 
 
 def preamble_extras(source: str) -> str:
-    """The author's safe \\usepackage lines and macro definitions, for Prarup's template.
-
-    \\newcommand becomes \\providecommand, so a macro the template already
-    defines is not an error.
-    """
     preamble = source.split("\\begin{document}", 1)[0]
     lines = []
     for m in re.finditer(r"\\usepackage\s*(\[[^\]]*\])?\s*\{([^}]*)\}", preamble):
@@ -154,7 +126,7 @@ def preamble_extras(source: str) -> str:
             lines.append(f"\\usepackage{m.group(1) or ''}{{{','.join(wanted)}}}")
     for m in _DEFINITIONS.finditer(preamble):
         start, end = m.start(), m.end()
-        # take the command name and every brace or bracket group that follows
+
         i = end
         while i < len(preamble):
             while i < len(preamble) and preamble[i] in " \t":

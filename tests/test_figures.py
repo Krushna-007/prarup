@@ -1,5 +1,3 @@
-"""Finding and resizing figures in LaTeX source. Pure string work."""
-
 from prarup.figures import (
     find_graphics,
     instrument,
@@ -46,7 +44,6 @@ def test_a_lone_graphic_in_a_figure_can_be_resized():
 
 
 def test_subfigures_are_left_alone():
-    """Each panel's width is relative to its own box. Resizing one breaks the set."""
     tex = r"""
 \begin{figure}
 \begin{subfigure}{0.45\columnwidth}\includegraphics[width=\linewidth]{a}\end{subfigure}

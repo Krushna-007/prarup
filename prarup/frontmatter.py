@@ -1,16 +1,8 @@
-"""Authors, affiliations and plain text, for the front matter of a paper.
-
-ingest.py finds where the title, authors and abstract are; this file reads
-them: authors in the layouts real papers use, and LaTeX turned into
-readable text. Pure string work: no files, no processes.
-"""
-
 import re
 
 from prarup.models import Author
 
 
-# Words that mark a line as an affiliation rather than a person's name
 _ORGANISATION = {
     "university", "institute", "dept", "dept.", "department", "school", "college",
     "laboratory", "lab", "centre", "center", "faculty", "inc", "inc.", "ltd", "ltd.",
@@ -22,15 +14,14 @@ _UNESCAPE = {r"\%": "%", r"\&": "&", r"\_": "_", r"\#": "#", r"\$": "$",
 
 
 def latex_to_plain(latex: str) -> str:
-    """Readable text from pandoc's LaTeX: formatting dropped, line breaks kept."""
     text = re.sub(r"\\label\{[^}]*\}", "", latex)
-    text = re.sub(r"\\textsuperscript\{[^}]*\}", "", text)   # affiliation markers
-    text = text.replace("\\\\", "\x00")                    # Shift+Enter line break
-    text = text.replace("~", " ")                           # LaTeX's non-breaking space
+    text = re.sub(r"\\textsuperscript\{[^}]*\}", "", text)
+    text = text.replace("\\\\", "\x00")
+    text = text.replace("~", " ")
     for escaped, char in _UNESCAPE.items():
         text = text.replace(escaped, char)
     previous = None
-    while previous != text:                                 # innermost first
+    while previous != text:
         previous = text
         text = re.sub(r"\\[a-zA-Z]+\*?\{([^{}]*)\}", r"\1", text)
     text = text.replace("---", "—").replace("--", "–")
@@ -50,12 +41,11 @@ def _looks_like_a_name(text: str) -> bool:
         return False
     if any(w.lower().strip(",") in _ORGANISATION for w in words):
         return False
-    # "Asha", "Rao", "A.", "Jean-Luc" pass; "IIT" and "DA-IICT" do not
+
     return all(re.fullmatch(_NAME_WORD, w) for w in words)
 
 
 def _split_marks(text: str) -> tuple[str, set]:
-    """"Kayeleigh Sharp¹" -> ("Kayeleigh Sharp", {"1"})."""
     marks = set()
     for m in _MARKER.finditer(text):
         for char in m.group():
@@ -65,18 +55,11 @@ def _split_marks(text: str) -> tuple[str, set]:
 
 
 def _clean_name(text: str) -> str:
-    text = re.sub(r"^\d+(st|nd|rd|th)\s+", "", text.strip())   # "1st Given Name"
+    text = re.sub(r"^\d+(st|nd|rd|th)\s+", "", text.strip())
     return text.strip(" ,*†‡§‖0123456789" + _SUPERSCRIPTS)
 
 
 def read_authors(paragraphs: list[str]) -> list[Author]:
-    """Read authors and affiliations from the paragraphs between title and abstract.
-
-    Handles one author per line or several per line ("A, B and C"),
-    "Name, Affiliation", blocks of name then affiliation lines, "Email:"
-    lines, a leading "Author(s):" label, and numbered affiliations tied
-    to authors by superscript markers (Rao¹ ... ¹ DA-IICT).
-    """
     authors, group, marks = [], [], {}
 
     def attach(text: str, to: list) -> None:
@@ -110,13 +93,12 @@ def read_authors(paragraphs: list[str]) -> list[Author]:
             elif not authors:
                 group = [Author(_clean_name(line))]
                 authors += group
-            else:                       # an affiliation line for the current group
+            else:
                 attach(line, group or authors[-1:])
     return authors
 
 
 def title_and_authors(paragraphs: list[str]) -> tuple[str, list[Author]]:
-    """The first paragraph is the title; the rest are authors and affiliations."""
     paragraphs = [p for p in paragraphs if p.strip()]
     if not paragraphs:
         return "", []

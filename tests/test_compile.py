@@ -1,6 +1,3 @@
-"""Integration tests. These run the real Tectonic binary, so they are slow
-and are skipped when it is not installed."""
-
 import shutil
 from pathlib import Path
 
@@ -33,11 +30,6 @@ def test_compiles_a_minimal_document(tmp_path):
 
 @needs_tectonic
 def test_failed_compile_does_not_leave_the_old_pdf(tmp_path):
-    """A broken edit must not be checked against the last good build.
-
-    Without this, a compile error reports "all checks passed" on whatever
-    PDF the previous run left behind.
-    """
     tex = tmp_path / "paper.tex"
     tex.write_text(MINIMAL_TEX)
     pdf, _ = compile_pdf(tex, tmp_path / "build")

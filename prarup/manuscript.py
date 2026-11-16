@@ -1,61 +1,45 @@
-"""The paper as Prarup understands it: front matter and a list of blocks.
-
-Every block keeps the pandoc node it came from, so whatever the user does
-not edit is written back exactly as it was read. Edited text is held as
-Markdown, which keeps emphasis, maths ($x^2$) and citations ([@key]).
-
-Saved as JSON next to the paper, so edits survive closing the window.
-"""
-
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from prarup.models import Author
 
-# What the outline shows for each kind of block
-TAGS = {
-    "heading": "H", "para": "P", "figure": "FIG", "table": "TAB",
-    "equation": "EQ", "list": "LIST", "quote": "QUOTE", "code": "CODE",
-    "references": "REF", "raw": "RAW",
-}
-
 
 @dataclass
 class Block:
     id: str
-    kind: str                     # a key of TAGS
-    text: str = ""                # Markdown: what the editor shows and edits
-    level: int = 0                # heading level, 1 = section
-    node: list = field(default_factory=list)   # original pandoc blocks
+    kind: str
+    text: str = ""
+    level: int = 0
+    node: list = field(default_factory=list)
     edited: bool = False
-    detected: str = ""            # how it was recognised, if not marked in the source
-    # figures
-    images: list = field(default_factory=list)   # paths inside the project folder
-    caption: str = ""             # Markdown, without the "Figure 3:" prefix
-    label: str = ""               # cross-reference label, if the source had one
-    number: int = 0               # number the author gave it, 0 if none
-    widths: list = field(default_factory=list)   # width the source asked for, inches
-    fit_width: str = ""           # width chosen by the fitter, e.g. "0.62\\columnwidth"
-    double: bool = False          # spans both columns (figure*)
-    # references
-    entries: list = field(default_factory=list)  # one Markdown string per reference
-    keys: list = field(default_factory=list)     # citation key of each entry, if known
+    detected: str = ""
+
+    images: list = field(default_factory=list)
+    caption: str = ""
+    label: str = ""
+    number: int = 0
+    widths: list = field(default_factory=list)
+    fit_width: str = ""
+    double: bool = False
+
+    entries: list = field(default_factory=list)
+    keys: list = field(default_factory=list)
 
 
 @dataclass
 class Manuscript:
-    source: str                   # path of the file the user opened
+    source: str
     title: str = ""
-    authors: list = field(default_factory=list)  # list of Author
+    authors: list = field(default_factory=list)
     abstract: str = ""
     keywords: str = ""
-    blocks: list = field(default_factory=list)   # list of Block
-    bibliography: str = ""        # .bib file inside the project folder, if any
-    api: list = field(default_factory=list)      # pandoc-api-version
-    notes: list = field(default_factory=list)    # what ingest noticed, for the user
-    preamble: str = ""            # the author's maths packages and macros (LaTeX input)
-    source_mtime: float = 0.0     # when the source was read; newer source means re-read it
+    blocks: list = field(default_factory=list)
+    bibliography: str = ""
+    api: list = field(default_factory=list)
+    notes: list = field(default_factory=list)
+    preamble: str = ""
+    source_mtime: float = 0.0
 
     def figures(self) -> list:
         return [b for b in self.blocks if b.kind == "figure"]
@@ -65,8 +49,6 @@ class Manuscript:
 
     def find(self, block_id: str) -> Block | None:
         return next((b for b in self.blocks if b.id == block_id), None)
-
-    # ------------------------------------------------------------ storage
 
     def save(self, path: Path) -> None:
         Path(path).write_text(json.dumps(asdict(self), indent=1))

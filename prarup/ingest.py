@@ -1,20 +1,3 @@
-"""Open a paper (.docx, .tex or a .zip of a LaTeX project) as a Manuscript.
-
-pandoc does the reading. This file decides what each piece *is*: real
-papers rarely mark structure properly, so most of the rules below come
-from three real Word papers and three real LaTeX papers:
-
-- a caption typed as its own paragraph after the image ("Figure 2. SVM
-  technique"), sometimes as a block quote, sometimes before a table
-- sub-images in separate paragraphs, captioned together ("Figures 4 a and b")
-- a caption whose image did not survive (a Word drawing): a figure with
-  no image, which the analyzer reports
-- section headings written as short bold paragraphs
-- "References" as a plain paragraph, not a heading
-- an equation written as inline maths followed by "(2)"
-- the abstract inside a layout table, spelt "A B S T R A C T"
-"""
-
 import re
 import shutil
 import zipfile
@@ -27,8 +10,8 @@ from prarup.manuscript import Block, Manuscript
 _FIG_CAPTION = re.compile(
     r"^\s*(?:fig(?:ure)?s?)\.?\s*(\d+)\s*(?:[a-z](?:\s*(?:,|and|&)\s*[a-z])*)?\s*[:.\-–—]?\s*(.*)$",
     re.I | re.S)
-# A paragraph standing alone must look like a caption, not a sentence:
-# "Figure 3: Results" or "Fig. 3. Results", never "Figure 3 shows".
+
+
 _STRICT_CAPTION = re.compile(r"^\s*(?:fig(?:ure)?s?)\.?\s*\d+\s*[a-z]?\s*[:.\-–—]\s+\S", re.I)
 _TAB_CAPTION = re.compile(r"^\s*table\s*(\d+|[IVX]+)\s*[:.\-–—]?\s*(.*)$", re.I | re.S)
 _REFERENCES = re.compile(r"^\s*(references?|bibliography|reference list|works cited)\s*:?\s*$", re.I)
@@ -39,18 +22,14 @@ IMAGE_EXTENSIONS = ["", ".pdf", ".png", ".jpg", ".jpeg", ".eps"]
 
 
 class OpenFailed(Exception):
-    """Raised when the file cannot be read as a paper."""
+    pass
 
-
-# ---------------------------------------------------------------- helpers
 
 def _unspace(text: str) -> str:
-    """"A B S T R A C T" -> "ABSTRACT", as some templates letter-space headings."""
     return re.sub(r"\b(?:[A-Z] ){2,}[A-Z]\b", lambda m: m.group().replace(" ", ""), text)
 
 
 def _images(node) -> list[tuple[str, dict]]:
-    """Every image in a node: (path, attributes)."""
     found = []
 
     def walk(n):
@@ -69,7 +48,6 @@ def _images(node) -> list[tuple[str, dict]]:
 
 
 def _image_only(block: dict) -> list:
-    """The images of a paragraph that holds nothing but images and short labels."""
     if block.get("t") not in ("Para", "Plain"):
         return []
     images, words = [], 0
@@ -85,7 +63,6 @@ def _image_only(block: dict) -> list:
 
 
 def _bold_heading(block: dict) -> list | None:
-    """The inlines of a short paragraph written entirely in bold, else None."""
     if block.get("t") not in ("Para", "Plain"):
         return None
     inner = [i for i in block["c"] if i.get("t") not in ("Space", "SoftBreak")]
@@ -105,7 +82,6 @@ _SECTION_NAMES = re.compile(
 
 
 def _named_section(block: dict) -> str | None:
-    """A short line that is a standard section name ("Introduction:"), bold or not."""
     if block.get("t") not in ("Para", "Plain"):
         return None
     text = pandoc.stringify(block)
@@ -113,7 +89,6 @@ def _named_section(block: dict) -> str | None:
 
 
 def _equation(block: dict) -> str | None:
-    """The LaTeX of a paragraph that is one equation, with an optional "(2)"."""
     if block.get("t") not in ("Para", "Plain"):
         return None
     maths = [i for i in block["c"] if i.get("t") == "Math"]
@@ -121,12 +96,11 @@ def _equation(block: dict) -> str | None:
     if len(maths) != 1 or any(i.get("t") != "Str" or not _EQ_NUMBER.match(i["c"]) for i in rest):
         return None
     if maths[0]["c"][0]["t"] != "DisplayMath" and not rest:
-        return None                       # inline maths alone is not an equation
+        return None
     return maths[0]["c"][1].strip()
 
 
 def _flatten(blocks: list) -> list:
-    """Unwrap plain Divs, keeping the ones whose class means something."""
     out = []
     for block in blocks:
         if block.get("t") == "Div":
@@ -141,16 +115,14 @@ def _flatten(blocks: list) -> list:
 
 
 def _main_tex(folder: Path) -> Path:
-    """The .tex with \\documentclass and \\begin{document}."""
     for tex in sorted(folder.rglob("*.tex"), key=lambda p: len(p.parts)):
-        text = tex.read_text(errors="replace")
+        text = tex.read_text(encoding="utf-8", errors="replace")
         if "\\documentclass" in text and "\\begin{document}" in text:
             return tex
     raise OpenFailed("no .tex file with \\documentclass and \\begin{document} in the archive")
 
 
 def _unzip(archive: Path, into: Path) -> Path:
-    """Extract safely: refuse paths that would land outside `into`."""
     into.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(archive) as z:
         for member in z.infolist():
@@ -161,15 +133,7 @@ def _unzip(archive: Path, into: Path) -> Path:
     return _main_tex(into)
 
 
-# ---------------------------------------------------------------- front matter
-
 def _front_matter(blocks: list, m: Manuscript) -> int:
-    """Read title, authors, abstract and keywords from the leading blocks.
-
-    Returns how many blocks were used. Anchors on the abstract; without
-    one, a short run of brief paragraphs before the first heading is
-    taken as title and authors.
-    """
     window = blocks[:30]
     texts = [_unspace(pandoc.stringify(b)) for b in window]
     where = None
@@ -198,7 +162,7 @@ def _front_matter(blocks: list, m: Manuscript) -> int:
         m.abstract = max(prose, key=len) if prose else ""
         for n, cell in enumerate(cells):
             found = _KEYWORDS.match(cell)
-            if found:            # "Keywords: a, b" in one cell, or the label alone then the list
+            if found:
                 m.keywords = found.group(1).strip() or (cells[n + 1] if n + 1 < len(cells) else "")
                 break
         m.notes.append("The abstract was inside a layout table and was taken out of it.")
@@ -227,7 +191,6 @@ _SYMBOLS = {r"\ddagger": "‡", r"\dagger": "†", r"\S": "§", r"\|": "‖", "|
 
 
 def _marks_to_unicode(latex: str) -> str:
-    """$^{(1)(2) *}$ and \textsuperscript{1} become ¹²*, so markers survive as text."""
     def convert(match: re.Match) -> str:
         inner = match.group(1)
         out = re.sub(r"\d", lambda d: d.group().translate(_SUPER), re.sub(r"[(){},\s]", "", inner))
@@ -239,7 +202,6 @@ def _marks_to_unicode(latex: str) -> str:
 
 
 def _tex_front_matter(doc: dict, main: Path, m: Manuscript) -> None:
-    """Title, abstract and authors of a LaTeX paper: pandoc's metadata plus the source."""
     meta = doc.get("meta", {})
     if "title" in meta:
         m.title = pandoc.stringify(meta["title"])
@@ -253,14 +215,10 @@ def _tex_front_matter(doc: dict, main: Path, m: Manuscript) -> None:
     m.authors = read_authors(paragraphs) if paragraphs else []
 
 
-# ---------------------------------------------------------------- media
-
 def _resolve(path: str, folder: Path) -> tuple[Path | None, str]:
-    """Find an image the way graphicx does, then case-insensitively."""
     for ext in IMAGE_EXTENSIONS:
         candidate = folder / (path + ext)
         if candidate.is_file():
-            # macOS finds "a.png" for "A.png"; Linux will not, so say so
             actual = {f.name.lower(): f.name for f in candidate.parent.iterdir()}
             real = actual.get(candidate.name.lower(), candidate.name)
             if real != candidate.name:
@@ -277,7 +235,6 @@ def _resolve(path: str, folder: Path) -> tuple[Path | None, str]:
 
 
 def _bring_inline_images(m: Manuscript, folder: Path, project: Path) -> None:
-    """Copy images that sit outside figures (in tables, paragraphs) and repoint them."""
     def walk(n):
         if isinstance(n, dict):
             if n.get("t") == "Image":
@@ -298,7 +255,6 @@ def _bring_inline_images(m: Manuscript, folder: Path, project: Path) -> None:
 
 
 def _bring_media(m: Manuscript, folder: Path, project: Path) -> None:
-    """Copy every LaTeX image into the project's media/ folder."""
     media = project / "media"
     media.mkdir(parents=True, exist_ok=True)
     for block in m.figures():
@@ -306,7 +262,7 @@ def _bring_media(m: Manuscript, folder: Path, project: Path) -> None:
         for path in block.images:
             found, note = _resolve(path, folder)
             if found is None:
-                moved.append(path)                 # stays missing; the analyzer reports it
+                moved.append(path)
                 continue
             target = media / found.name
             if not target.exists():
@@ -316,8 +272,6 @@ def _bring_media(m: Manuscript, folder: Path, project: Path) -> None:
                 m.notes.append(f"Figure image {note}.")
         block.images = moved
 
-
-# ---------------------------------------------------------------- body
 
 def _body(blocks: list, m: Manuscript, start_id: int = 1) -> list[Block]:
     out: list[Block] = []
@@ -456,7 +410,6 @@ def _body(blocks: list, m: Manuscript, start_id: int = 1) -> list[Block]:
 
 
 def _to_markdown(m: Manuscript) -> None:
-    """Fill each block's editable text, and captions, as Markdown, in two pandoc runs."""
     blocks, captions, entries = [], [], []
     for b in m.blocks:
         if b.kind == "heading":
@@ -464,23 +417,23 @@ def _to_markdown(m: Manuscript) -> None:
         elif b.kind not in ("equation", "figure", "references"):
             blocks.append(b.node)
         if b.kind in ("figure", "table"):
-            captions.append(b.caption or [])          # always a list of blocks here
+            captions.append(b.caption or [])
         if b.kind == "references":
             entries += b.entries
 
     texts = iter(pandoc.blocks_to(blocks, m.api, "markdown"))
-    caps = iter(pandoc.blocks_to(captions, m.api, "markdown") if captions else [])
-    refs = iter(pandoc.blocks_to(entries, m.api, "markdown") if entries else [])
+    caps = iter(pandoc.blocks_to(captions, m.api, "markdown"))
+    refs = iter(pandoc.blocks_to(entries, m.api, "markdown"))
     for b in m.blocks:
         if b.kind not in ("equation", "figure", "references"):
             b.text = next(texts)
         if b.kind in ("figure", "table"):
             caption = next(caps)
-            caption = re.sub(r"^>\s?", "", caption, flags=re.M)          # a block-quote caption
+            caption = re.sub(r"^>\s?", "", caption, flags=re.M)
             pattern = _FIG_CAPTION if b.kind == "figure" else _TAB_CAPTION
             plain = re.sub(r"[*_]", "", caption)
             match = pattern.match(plain)
-            if match:                              # IEEE numbers figures itself
+            if match:
                 caption = match.group(2).strip()
                 b.number = b.number or (int(match.group(1)) if match.group(1).isdigit() else 0)
             b.caption = " ".join(caption.split())
@@ -494,7 +447,6 @@ def _tidy_paths(m: Manuscript) -> None:
 
 
 def open_paper(path: Path, project: Path) -> Manuscript:
-    """Read a paper into a Manuscript, with its images copied into project/media."""
     path = Path(path)
     suffix = path.suffix.lower()
     if suffix not in (".docx", ".tex", ".zip"):
@@ -527,13 +479,13 @@ def open_paper(path: Path, project: Path) -> Manuscript:
         items = texsource.bibitems(source)
         bbl = main.with_suffix(".bbl")
         if not items and bbl.is_file():
-            items = texsource.bibitems(bbl.read_text(errors="replace"))
+            items = texsource.bibitems(bbl.read_text(encoding="utf-8", errors="replace"))
         for name in texsource.bibliography_files(source):
             bib = main.parent / (name if name.endswith(".bib") else f"{name}.bib")
             if bib.is_file():
                 shutil.copy2(bib, project / "refs.bib")
                 m.bibliography = "refs.bib"
-                entries = texsource.bib_entries(bib.read_text(errors="replace"))
+                entries = texsource.bib_entries(bib.read_text(encoding="utf-8", errors="replace"))
                 refs = next((b for b in m.blocks if b.kind == "references"), None)
                 if refs is None:
                     refs = Block(id=f"b{len(m.blocks) + 1}", kind="references", text="References")

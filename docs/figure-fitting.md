@@ -1,11 +1,11 @@
-# 15 · The Figure Fitter
+# Figure fitting
 
 Fitting a figure into a column is easy. Fitting it **without making its text
 unreadable** is the hard part, and no tool we know of does it. This document
 explains how Prarup does.
 
 ```bash
-poetry run prarup fit paper.docx      # or paper.tex
+python -m prarup.main fit paper.docx      # or paper.tex
 ```
 
 In the window: open the paper, **Build**, then **Fit figures**.
@@ -178,5 +178,3 @@ test in `test_end_to_end.py`. Every expected number in them is worked out by
 hand from the plot's own text size and the IEEE geometry.
 
 ---
-
-**Previous:** [← 14 · How To Build It](14-how-to-build.md) · **Home:** [README](../README.md)

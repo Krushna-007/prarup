@@ -1,16 +1,3 @@
-"""The figure fitter: compile, measure, resize, compile again.
-
-Every figure gets the largest width that stays inside its column. If that
-leaves its text below the readable minimum, it moves across both columns.
-If the paper is then over the page limit, figures with readable text to
-spare are shrunk together, searching by halves, until it fits or every
-figure is at its smallest readable size. Nothing is ever shrunk below
-that size: the report says how much to cut instead.
-
-The author's file is never changed. The result is <name>-fitted.tex,
-written beside it so its relative image paths still resolve.
-"""
-
 import math
 from pathlib import Path
 
@@ -21,21 +8,19 @@ from prarup.figures import find_graphics, instrument, resize
 from prarup.measure import measure
 from prarup.models import FigureChange, FitReport, Rules
 
-SEARCH_STEPS = 5     # 2^5 = 32 steps between full size and the smallest readable
+SEARCH_STEPS = 5
 
-# LaTeX's measured box comes out about a point narrower than the width it
-# was given. Differences this small are rounding, not a change worth making.
+
 SLACK = 2.0
 
 
 class FitFailed(Exception):
-    """Raised when the paper cannot be compiled or measured."""
+    pass
 
 
 def _compile(tex: str, name: str, source: Path, out_dir: Path) -> Path:
-    """Compile a variant of the paper, written beside the original."""
     path = source.with_name(name)
-    path.write_text(tex)
+    path.write_text(tex, encoding="utf-8")
     try:
         pdf, log = compile_pdf(path, out_dir)
     finally:
@@ -51,7 +36,6 @@ def _pages(pdf: Path) -> int:
 
 
 def _last_page_fill(pdf: Path) -> float:
-    """How far down the last page the content reaches, 0 to 1."""
     with pymupdf.open(pdf) as doc:
         page = doc[-1]
         bottoms = [b[3] for b in page.get_text("blocks")]
@@ -60,23 +44,14 @@ def _last_page_fill(pdf: Path) -> float:
 
 
 def _width_expr(width: float, double: bool, geometry) -> str:
-    """Width as a fraction of the column or text width, rounded down."""
     base, name = (geometry.text, r"\textwidth") if double else (geometry.column, r"\columnwidth")
     return f"{math.floor(width / base * 1000) / 1000:g}{name}"
 
 
-# Under the "limit" policy no figure shrinks below this share of its
-# column, however much it would help the page count.
 LIMIT_FLOOR = 0.4
 
 
 def plan(graphic, m, geometry, min_pt: float, policy: str = "readable"):
-    """(width, double, smallest_width, note) for one measured graphic.
-
-    "readable": text never below min_pt, moving across both columns if it
-    must. "limit": the page limit first; the figure stays in its column and
-    may shrink to LIMIT_FLOOR of it, and the report shows its text size.
-    """
     double = graphic.env == "figure*"
     if policy == "limit":
         widest = geometry.text if double else geometry.column
@@ -85,9 +60,7 @@ def plan(graphic, m, geometry, min_pt: float, policy: str = "readable"):
         target = min(m.width, widest)
         return target, double, min(target, LIMIT_FLOOR * widest), ""
     k = m.text_per_width
-    # aim SLACK wider: the built figure comes out up to a point narrower
-    # than asked, and the width is rounded down, which would otherwise
-    # leave its text a hair under the minimum
+
     smallest = min_pt / k + SLACK if k else None
 
     if smallest is not None and smallest > geometry.text:
@@ -99,15 +72,14 @@ def plan(graphic, m, geometry, min_pt: float, policy: str = "readable"):
         double = True
     widest = geometry.text if double else geometry.column
     if abs(m.width - widest) < SLACK:
-        widest = m.width            # already full width; keep it exactly
+        widest = m.width
     floor = smallest if smallest is not None else min(m.width, widest)
     note = "" if k else "no text found to measure, so it is only kept inside its column"
     return max(floor, min(m.width, widest)), double, floor, note
 
 
 def fit_paper(source: Path, out_dir: Path, rules: Rules, policy: str = "readable") -> FitReport:
-    """Fit the figures of a .tex paper and return what changed."""
-    tex = source.read_text()
+    tex = source.read_text(encoding="utf-8")
     graphics = find_graphics(tex)
     if not graphics:
         raise FitFailed("the paper has no \\includegraphics to fit")
@@ -136,11 +108,6 @@ def fit_paper(source: Path, out_dir: Path, rules: Rules, policy: str = "readable
         changes.append(change)
 
     def layout(t: float) -> dict:
-        """Every figure at t of the way from its smallest readable width to its target.
-
-        A figure that would end up where it started is left out, so the
-        author's own \\includegraphics stays exactly as written.
-        """
         sizes = {}
         for i, (w, d) in targets.items():
             width = floors[i] + t * (w - floors[i])
@@ -155,8 +122,9 @@ def fit_paper(source: Path, out_dir: Path, rules: Rules, policy: str = "readable
     pages = pages_at(1.0)
     if pages > rules.page_limit and targets:
         smallest_pdf = _compile(resize(tex, layout(0.0)), f"{stem}-prarup-try.tex", source, out_dir)
-        if _pages(smallest_pdf) > rules.page_limit:
-            over = _pages(smallest_pdf) - rules.page_limit - 1 + _last_page_fill(smallest_pdf)
+        smallest_pages = _pages(smallest_pdf)
+        if smallest_pages > rules.page_limit:
+            over = smallest_pages - rules.page_limit - 1 + _last_page_fill(smallest_pdf)
             summary = (f"Still about {over:.1f} pages over the {rules.page_limit}-page limit with "
                        f"every figure at its smallest readable size. Cut text or figures; "
                        f"shrinking further would make figure text smaller than "
@@ -164,7 +132,7 @@ def fit_paper(source: Path, out_dir: Path, rules: Rules, policy: str = "readable
                        f"Still about {over:.1f} pages over the {rules.page_limit}-page limit even with "
                        f"every figure at {LIMIT_FLOOR:.0%} of its column. Cut text.")
         else:
-            low, high = 0.0, 1.0                 # low always fits, high does not
+            low, high = 0.0, 1.0
             for _ in range(SEARCH_STEPS):
                 middle = (low + high) / 2
                 low, high = (middle, high) if pages_at(middle) <= rules.page_limit else (low, middle)
@@ -173,9 +141,8 @@ def fit_paper(source: Path, out_dir: Path, rules: Rules, policy: str = "readable
     fitted = resize(tex, layout(best))
     fitted_tex = source.with_name(f"{stem}-fitted.tex" if policy == "readable"
                                   else f"{stem}-fitted-limit.tex")
-    fitted_tex.write_text(fitted)
+    fitted_tex.write_text(fitted, encoding="utf-8")
 
-    # measure the result rather than trusting the arithmetic
     check_pdf = _compile(instrument(fitted), f"{stem}-prarup-measure.tex", source, out_dir)
     _, after = measure(check_pdf, find_graphics(fitted), source.parent)
     after = {m.index: m for m in after}
@@ -201,7 +168,6 @@ def _size(points: float) -> str:
 
 
 def describe(report: FitReport) -> list[str]:
-    """The report as lines a person reads top down."""
     lines = []
     for c in report.changes:
         span = lambda double: "both columns" if double else "one column"

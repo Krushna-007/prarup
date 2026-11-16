@@ -1,15 +1,3 @@
-"""Command line entry point.
-
-    prarup inspect paper.docx        what is missing, and every image checked
-    prarup build paper.docx          build the IEEE PDF and check it
-    prarup fit paper.tex             fit figures to columns and the page limit
-    prarup export paper.docx         submission zip: PDF, LaTeX, images, report
-    prarup check paper.pdf [--fix]   check (and repair) a finished PDF
-
-A paper may be .docx, .tex or a .zip of a LaTeX project. Its working folder
-<name>-prarup/ sits beside it and keeps any edits made in the window.
-"""
-
 import argparse
 import sys
 from pathlib import Path
@@ -28,7 +16,6 @@ PAPERS = {".docx", ".tex", ".zip"}
 
 
 def load_rules(args) -> Rules:
-    """Rules come from a named preset, an explicit file, or the defaults."""
     if args.rules:
         rules = Rules.load(args.rules)
     else:
@@ -42,7 +29,6 @@ def load_rules(args) -> Rules:
 
 
 def parse_authors(values: list[str] | None) -> list[Author]:
-    """Turn --author "Name:Affiliation" arguments into Author objects."""
     authors = []
     for value in values or []:
         name, _, affiliation = value.partition(":")
@@ -51,7 +37,6 @@ def parse_authors(values: list[str] | None) -> list[Author]:
 
 
 def print_report(issues, pdf_path: Path) -> None:
-    """Print PDF findings in a form that reads top down."""
     if not issues:
         print(f"{pdf_path.name}: all checks passed.")
         return
@@ -74,8 +59,8 @@ def print_findings(findings: list) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="prarup", description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(prog="prarup",
+                                     description="Format and check research papers for submission.")
     sub = parser.add_subparsers(dest="command", required=True)
     commands = [
         ("inspect", "list what is missing and check every image"),
@@ -99,9 +84,6 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--author", action="append", metavar="NAME:AFFILIATION",
                            help="set the authors (repeat for each)")
             p.add_argument("--abstract", help="set the abstract")
-        if name == "inspect":
-            p.add_argument("--classify", action="store_true",
-                           help="also run the AI-image classifier (poetry install --with ai)")
         if name == "fit":
             p.add_argument("--min-figure-text", type=float, metavar="PT",
                            help="smallest readable text inside a figure (default: preset)")
@@ -125,7 +107,7 @@ def _check(pdf: Path, rules: Rules, fix: bool) -> int:
         except (GhostscriptNotFound, RepairFailed) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
-        # Ghostscript exits zero on files it did not change: only a fresh check proves a repair
+
         issues = run_all_checks(fixed, rules)
         print(f"repaired -> {fixed}\n")
         pdf = fixed
@@ -162,12 +144,11 @@ def main() -> int:
             project.set_front(args.title, parse_authors(args.author) or None, args.abstract)
 
         if args.command == "inspect":
-            findings = project.findings(classify=args.classify)
+            findings = project.findings()
             print_findings(findings)
-            for r in project.reports:
-                print(f"  Fig. {r.figure}  {Path(r.path).name}: {r.width_px}x{r.height_px} px, "
-                      f"{r.dpi:.0f} dpi, {r.verdict}"
-                      + (f", classifier {r.ai_score:.0%}" if r.ai_score is not None else ""))
+            for report in project.reports:
+                print(f"  Fig. {report.figure}  {Path(report.path).name}: "
+                      f"{report.width_px}x{report.height_px} px, {report.dpi:.0f} dpi")
             return 1 if any(f.severity == "error" for f in findings) else 0
 
         if args.command == "fit":

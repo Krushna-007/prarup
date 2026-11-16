@@ -33,11 +33,10 @@ def test_missing_keys_fall_back_to_defaults(tmp_path):
     path.write_text("page_limit: 4\n")
     rules = Rules.load(path)
     assert rules.page_limit == 4
-    assert rules.columns == 2          # default
+    assert rules.columns == 2
 
 
 def test_unknown_keys_are_rejected(tmp_path):
-    """A typo in a rules file should be loud, not silently ignored."""
     path = tmp_path / "typo.yaml"
     path.write_text("page_limmit: 4\n")
     with pytest.raises(ValueError, match="page_limmit"):

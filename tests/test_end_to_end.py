@@ -1,15 +1,9 @@
-"""The test that proves the product.
-
-Build a paper that includes a matplotlib figure exported with the default
-settings, compile it, and confirm the checker finds the defect that would
-have caused IEEE to reject it.
-"""
-
 import shutil
 from pathlib import Path
 
 import pytest
 
+from prarup.process import find_tool
 from prarup.checks import run_all_checks
 from prarup.compile import compile_pdf
 from prarup.models import Rules
@@ -38,7 +32,6 @@ See Figure~\ref{fig:one}.
 
 @needs_tectonic
 def test_a_paper_with_a_default_matplotlib_figure_is_rejected(tmp_path):
-    """This is the whole product in one test."""
     shutil.copy(FIXTURES / "mpl_type3.pdf", tmp_path / "figure.pdf")
     (tmp_path / "paper.tex").write_text(PAPER)
 
@@ -52,7 +45,6 @@ def test_a_paper_with_a_default_matplotlib_figure_is_rejected(tmp_path):
 
 @needs_tectonic
 def test_the_same_paper_with_a_corrected_figure_passes(tmp_path):
-    """Two lines of rcParams difference, and the paper is submittable."""
     shutil.copy(FIXTURES / "mpl_truetype.pdf", tmp_path / "figure.pdf")
     (tmp_path / "paper.tex").write_text(PAPER)
 
@@ -69,9 +61,8 @@ needs_pandoc = pytest.mark.skipif(
 
 @needs_tectonic
 @needs_pandoc
+@pytest.mark.skipif(find_tool("tesseract") is None, reason="Tesseract needed for bitmap text measurement")
 def test_the_demo_paper_goes_from_unreadable_to_readable(tmp_path):
-    """The demo: a Word figure 8 in wide squeezed into one column prints its
-    10 pt labels at about 4 pt. Build says so; Fit figures fixes it."""
     from prarup.models import Rules
     from prarup.project import Project
 

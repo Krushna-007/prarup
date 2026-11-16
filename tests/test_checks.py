@@ -7,29 +7,21 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def test_type3_font_is_reported():
-    """matplotlib's default export uses Type3, which IEEE rejects."""
     issues = check_fonts(FIXTURES / "mpl_type3.pdf")
     assert [i.code for i in issues] == ["FONT-02"]
 
 
 def test_type3_cannot_be_fixed_automatically():
-    """Ghostscript cannot repair Type3. The figure has to be remade."""
     issue = check_fonts(FIXTURES / "mpl_type3.pdf")[0]
     assert issue.can_fix is False
 
 
 def test_type3_is_not_also_reported_as_unembedded():
-    """A Type3 font reports ext='n/a' but is not a missing-font problem.
-
-    Reporting both FONT-01 and FONT-02 for one font would send the user
-    to Ghostscript, which cannot help.
-    """
     codes = [i.code for i in check_fonts(FIXTURES / "mpl_type3.pdf")]
     assert "FONT-01" not in codes
 
 
 def test_corrected_figure_is_clean():
-    """pdf.fonttype = 42 is the fix, so the output must come back empty."""
     assert check_fonts(FIXTURES / "mpl_truetype.pdf") == []
 
 
@@ -45,7 +37,6 @@ def test_paper_over_the_limit_is_reported():
 
 
 def test_page_limit_is_a_warning_not_an_error():
-    """Being over the limit is for the author to fix, not us."""
     issues = check_page_count(FIXTURES / "eight_pages.pdf", Rules(page_limit=6))
     assert issues[0].severity == "warning"
     assert issues[0].can_fix is False
@@ -62,7 +53,6 @@ def test_encrypted_pdf_is_reported():
 
 
 def test_encryption_can_be_removed_automatically():
-    """Stripping encryption is a safe, deterministic repair."""
     assert check_security(FIXTURES / "protected.pdf")[0].can_fix is True
 
 
@@ -76,7 +66,6 @@ def test_run_all_checks_returns_nothing_for_a_clean_file():
 
 
 def test_errors_are_listed_before_warnings():
-    """The report is read top down, so the blocking items come first."""
     issues = run_all_checks(FIXTURES / "eight_pages.pdf", Rules(page_limit=1))
     severities = [i.severity for i in issues]
     assert severities == sorted(severities, key=lambda s: s != "error")
@@ -89,12 +78,10 @@ def test_unembedded_font_is_reported():
 
 
 def test_unembedded_font_can_be_fixed():
-    """Unlike Type3, Ghostscript can embed a referenced font in place."""
     assert check_fonts(FIXTURES / "unembedded.pdf")[0].can_fix is True
 
 
 def _same_font_on_pages(path, pages, fontname="helv"):
-    """A PDF that uses one unembedded font on several pages."""
     import pymupdf
 
     doc = pymupdf.open()
@@ -106,7 +93,6 @@ def _same_font_on_pages(path, pages, fontname="helv"):
 
 
 def test_one_font_on_many_pages_is_reported_once(tmp_path):
-    """A real paper repeats a font on every page. One line per font, not per page."""
     pdf = _same_font_on_pages(tmp_path / "many.pdf", 5)
     issues = check_fonts(pdf)
     assert len(issues) == 1
@@ -126,20 +112,17 @@ def test_page_list_collapses_runs():
 
 
 def test_subset_prefix_is_dropped_from_the_name():
-    """ABCDEF+Times is the same font as GHIJKL+Times. Name it once, plainly."""
     from prarup.checks import plain_font_name
     assert plain_font_name("FHXFSG+TimesNewRomanPSMT") == "TimesNewRomanPSMT"
     assert plain_font_name("Helvetica") == "Helvetica"
 
 
 def test_a_font_with_no_name_is_still_described():
-    """Ghostscript rewrites Type3 fonts with an empty name."""
     from prarup.checks import plain_font_name
     assert plain_font_name("") == "an unnamed font"
 
 
 def test_type3_message_says_how_to_fix_it():
-    """The author cannot act on "Type3" alone. Tell them the setting."""
     message = check_fonts(FIXTURES / "mpl_type3.pdf")[0].message
     assert "pdf.fonttype" in message
 
@@ -177,7 +160,6 @@ def _with_bookmarks(path):
 
 
 def test_bookmarks_are_reported(tmp_path):
-    """hyperref adds bookmarks, which some IEEE pipelines reject."""
     from prarup.checks import check_bookmarks
 
     issues = check_bookmarks(_with_bookmarks(tmp_path / "marked.pdf"))
@@ -198,7 +180,6 @@ def test_run_all_checks_includes_bookmarks(tmp_path):
 
 
 def _two_column_page(path, image_rect, geometry=(252, 516, 49.15, 12)):
-    """One page with a bitmap at image_rect and Prarup's geometry note."""
     import pymupdf
 
     doc = pymupdf.open()
@@ -219,8 +200,6 @@ def _two_column_page(path, image_rect, geometry=(252, 516, 49.15, 12)):
 
 
 def test_a_figure_running_past_its_column_is_an_error(tmp_path):
-    """What pandoc makes of a 5.8 in figure from Word: it starts at the
-    left column and runs across the right one."""
     from prarup.checks import check_figure_overflow
 
     pdf = _two_column_page(tmp_path / "p.pdf", (49, 200, 469, 350))
@@ -237,7 +216,6 @@ def test_a_figure_inside_its_column_is_fine(tmp_path):
 
 
 def test_a_figure_centred_across_both_columns_is_fine(tmp_path):
-    """figure* is centred over the whole text block. That is not overflow."""
     from prarup.checks import check_figure_overflow
 
     left, text, width = 49.15, 516, 420
@@ -247,7 +225,6 @@ def test_a_figure_centred_across_both_columns_is_fine(tmp_path):
 
 
 def test_without_geometry_the_overflow_check_stays_quiet(tmp_path):
-    """A PDF Prarup did not build has no column widths to compare with."""
     from prarup.checks import check_figure_overflow
 
     pdf = _two_column_page(tmp_path / "p.pdf", (49, 200, 469, 350), geometry=None)

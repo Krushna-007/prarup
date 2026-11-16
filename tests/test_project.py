@@ -1,5 +1,3 @@
-"""The controller: open, edit, check, build, fit, export, on real papers."""
-
 import shutil
 import zipfile
 from pathlib import Path
@@ -11,7 +9,6 @@ from prarup.project import Project, _readable_error
 
 REAL = Path(__file__).parent / "fixtures" / "real"
 LATEX = Path(__file__).parent / "fixtures" / "latex_project"
-IMAGES = Path(__file__).parent / "fixtures" / "images"
 
 pytestmark = pytest.mark.skipif(
     shutil.which("pandoc") is None or shutil.which("tectonic") is None,
@@ -66,21 +63,13 @@ def test_build_compiles_and_checks(svm):
     assert result.pdf.parent == svm.folder / "build"
 
 
-def test_an_inserted_ai_image_is_caught_before_the_build(svm):
-    fig = svm.insert(svm.m.blocks[5].id, "figure")
-    svm.set_image(fig.id, IMAGES / "gemini_c2pa.jpg")
-    svm.set_caption(fig.id, "Overview of the method")
-    codes = [f.code for f in svm.findings()]
-    assert "IMG-02" in codes
-
-
 def test_export_bundle_has_everything(svm, tmp_path):
     out = svm.export(tmp_path / "submission.zip", Rules())
     names = zipfile.ZipFile(out).namelist()
     assert {"paper.pdf", "paper.tex", "prarup-report.md", "README.txt"} <= set(names)
     assert any(n.startswith("media/") for n in names)
     report = zipfile.ZipFile(out).read("prarup-report.md").decode()
-    assert "FIG-03" in report                       # Fig. 1 still has no image
+    assert "FIG-03" in report
 
 
 def test_fit_keeps_its_layout_for_later_builds(tmp_path):
@@ -89,9 +78,9 @@ def test_fit_keeps_its_layout_for_later_builds(tmp_path):
     [report] = project.fit(Rules(page_limit=6))
     project.apply_fit(report)
     fig = project.m.figures()[0]
-    assert fig.fit_width.endswith("columnwidth")         # remembered on the figure
+    assert fig.fit_width.endswith("columnwidth")
     assert project.build(Rules()).ok
-    assert f"width={fig.fit_width}" in project.tex_path().read_text()   # and used again
+    assert f"width={fig.fit_width}" in project.tex_path().read_text()
 
 
 def test_compile_errors_are_shown_as_one_sentence():

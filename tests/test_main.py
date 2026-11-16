@@ -1,9 +1,10 @@
-"""Tests for the command line behaviour."""
-
 import shutil
 from pathlib import Path
 
 import pytest
+
+from prarup.process import find_tool
+from prarup.fix import find_ghostscript
 
 from prarup.main import main
 
@@ -22,12 +23,10 @@ def test_clean_file_exits_zero(monkeypatch, capsys):
 
 
 def test_blocking_error_exits_one(monkeypatch):
-    """Non-zero on error, so this can gate a submission script."""
     assert run(monkeypatch, "check", str(FIXTURES / "mpl_type3.pdf")) == 1
 
 
 def test_warning_alone_still_exits_zero(monkeypatch):
-    """Over the page limit is worth saying, but it does not block."""
     code = run(monkeypatch, "check", str(FIXTURES / "eight_pages.pdf"),
                "--page-limit", "6")
     assert code == 0
@@ -47,7 +46,6 @@ def test_report_names_the_problem(monkeypatch, capsys):
 
 
 def test_preset_supplies_the_page_limit(monkeypatch, capsys):
-    """The shipped ieee preset sets 6 pages, so an 8 page file warns."""
     run(monkeypatch, "check", str(FIXTURES / "eight_pages.pdf"))
     assert "GEOM-01" in capsys.readouterr().out
 
@@ -67,9 +65,8 @@ def test_bad_rules_file_exits_two(monkeypatch, capsys, tmp_path):
     assert "page_limmit" in capsys.readouterr().err
 
 
-@pytest.mark.skipif(shutil.which("gs") is None, reason="ghostscript not installed")
+@pytest.mark.skipif(find_ghostscript() is None, reason="ghostscript not installed")
 def test_fix_flag_repairs_and_rechecks(monkeypatch, capsys, tmp_path):
-    """--fix must verify its own work, not assume it."""
     target = tmp_path / "unembedded.pdf"
     shutil.copy(FIXTURES / "unembedded.pdf", target)
 
@@ -81,9 +78,8 @@ def test_fix_flag_repairs_and_rechecks(monkeypatch, capsys, tmp_path):
     assert code == 0
 
 
-@pytest.mark.skipif(shutil.which("gs") is None, reason="ghostscript not installed")
+@pytest.mark.skipif(find_ghostscript() is None, reason="ghostscript not installed")
 def test_fix_does_not_claim_success_on_type3(monkeypatch, capsys, tmp_path):
-    """Type3 is unfixable, so --fix must still report it and exit 1."""
     target = tmp_path / "type3.pdf"
     shutil.copy(FIXTURES / "mpl_type3.pdf", target)
 
@@ -101,7 +97,6 @@ def test_a_corrupt_pdf_exits_two_without_a_traceback(monkeypatch, capsys, tmp_pa
 
 
 def test_build_refuses_an_unsupported_file_type(monkeypatch, capsys, tmp_path):
-    """A .txt would otherwise reach pandoc or Tectonic and fail obscurely."""
     notes = tmp_path / "notes.txt"
     notes.write_text("hello")
     assert run(monkeypatch, "build", str(notes)) == 2
@@ -125,7 +120,7 @@ def test_inspect_lists_what_a_real_paper_is_missing(monkeypatch, capsys, tmp_pat
     shutil.copy(REAL / "svm_diabetes.docx", paper)
     code = run(monkeypatch, "inspect", str(paper))
     out = capsys.readouterr().out
-    assert code == 1                                   # Fig. 1 has no image: an error
+    assert code == 1
     assert "FIG-03  Fig. 1 has a caption but no image." in out
     assert "dpi" in out
 
@@ -138,10 +133,12 @@ def test_build_a_real_word_paper(monkeypatch, capsys, tmp_path):
     out = capsys.readouterr().out
     assert "built ->" in out
     assert (tmp_path / "svm-prarup" / "build" / "paper.pdf").exists()
-    assert "GEOM-03" in out                            # Fig. 3 prints at 3.9 pt
+    if find_tool("tesseract"):
+        assert "GEOM-03" in out
 
 
 @needs_tools
+@pytest.mark.skipif(find_tool("tesseract") is None, reason="Tesseract needed for bitmap text measurement")
 def test_fit_then_the_figure_is_readable(monkeypatch, capsys, tmp_path):
     paper = tmp_path / "svm.docx"
     shutil.copy(REAL / "svm_diabetes.docx", paper)
@@ -153,7 +150,6 @@ def test_fit_then_the_figure_is_readable(monkeypatch, capsys, tmp_path):
 
 @needs_tools
 def test_typed_metadata_with_latex_special_characters(monkeypatch, capsys, tmp_path):
-    """Typed "12%" once started a LaTeX comment and cut the abstract short."""
     import pymupdf
     paper = tmp_path / "svm.docx"
     shutil.copy(REAL / "svm_diabetes.docx", paper)

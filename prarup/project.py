@@ -1,16 +1,3 @@
-"""One open paper: its Manuscript, its folder, and everything you can do to it.
-
-The window and the command line both go through this class, so they
-cannot drift apart. Every edit is saved at once to manuscript.json in the
-project folder, next to the paper.
-
-    <paper>-prarup/
-        manuscript.json   the paper as Prarup holds it, with your edits
-        media/            every image, copied in
-        paper.tex         the IEEE LaTeX, written on each build
-        build/paper.pdf   the compiled paper
-"""
-
 import re
 import shutil
 import zipfile
@@ -20,7 +7,7 @@ from pathlib import Path
 
 import pymupdf
 
-from prarup import images as forensics
+from prarup import images
 from prarup.analyze import Finding, analyze
 from prarup.checks import UnreadablePdf, run_all_checks
 from prarup.compile import compile_pdf
@@ -36,7 +23,7 @@ from prarup.renderer import render
 @dataclass
 class BuildResult:
     pdf: Path | None
-    issues: list = field(default_factory=list)   # PDF compliance issues
+    issues: list = field(default_factory=list)
     log: str = ""
     pages: int = 0
 
@@ -50,10 +37,8 @@ class Project:
         self.source = Path(source)
         self.folder = Path(folder)
         self.m = manuscript
-        self.reports: list = []           # last image reports
+        self.reports: list = []
         self.last_build: BuildResult | None = None
-
-    # ------------------------------------------------------------ open, save
 
     @staticmethod
     def folder_for(source: Path) -> Path:
@@ -61,7 +46,6 @@ class Project:
 
     @classmethod
     def open(cls, source: Path, folder: Path | None = None, fresh: bool = False) -> "Project":
-        """Open a paper, resuming saved edits unless the source changed since."""
         source = Path(source).resolve()
         folder = Path(folder) if folder else cls.folder_for(source)
         saved = folder / "manuscript.json"
@@ -78,8 +62,6 @@ class Project:
     def save(self) -> None:
         self.folder.mkdir(parents=True, exist_ok=True)
         self.m.save(self.folder / "manuscript.json")
-
-    # ------------------------------------------------------------ edits
 
     def _block(self, block_id: str) -> Block:
         block = self.m.find(block_id)
@@ -110,7 +92,6 @@ class Project:
         self.save()
 
     def set_kind(self, block_id: str, kind: str, level: int = 1) -> None:
-        """Re-tag a block: a paragraph that is really a heading, or the reverse."""
         block = self._block(block_id)
         if kind not in ("heading", "para", "quote"):
             raise ValueError("a block can be re-tagged as heading, para or quote")
@@ -133,7 +114,6 @@ class Project:
         return f"b{max(used, default=0) + 1}"
 
     def insert(self, after_id: str | None, kind: str, text: str = "") -> Block:
-        """Add a paragraph, heading or empty figure after a block (or at the start)."""
         block = Block(id=self._new_id(), kind=kind, text=text, level=1 if kind == "heading" else 0,
                       edited=True, detected="added by you")
         at = 0 if after_id is None else self.m.blocks.index(self._block(after_id)) + 1
@@ -142,53 +122,46 @@ class Project:
         return block
 
     def _import_image(self, file: Path) -> str:
+        file = Path(file)
         media = self.folder / "media"
         media.mkdir(parents=True, exist_ok=True)
-        name = re.sub(r"[^\w.\-]", "_", Path(file).name)
+        name = Path(re.sub(r"[^\w.\-]", "_", file.name))
         target, n = media / name, 1
-        while target.exists() and target.read_bytes() != Path(file).read_bytes():
-            target = media / f"{Path(name).stem}-{n}{Path(name).suffix}"
+        contents = file.read_bytes() if target.exists() else b""
+        while target.exists() and target.read_bytes() != contents:
+            target = media / f"{name.stem}-{n}{name.suffix}"
             n += 1
         if not target.exists():
             shutil.copy2(file, target)
         return f"media/{target.name}"
 
     def set_image(self, block_id: str, file: Path, index: int = 0) -> None:
-        """Replace one image of a figure (or give a figure with none its image)."""
         block = self._block(block_id)
         path = self._import_image(file)
         if index < len(block.images):
             block.images[index] = path
         else:
             block.images.append(path)
-        block.fit_width = ""                 # the old fitted width belonged to the old image
+        block.fit_width = ""
         self.save()
 
-    def remove_image(self, block_id: str, index: int) -> None:
-        block = self._block(block_id)
-        del block.images[index]
-        self.save()
-
-    # ------------------------------------------------------------ checks
-
-    def findings(self, classify: bool = False) -> list[Finding]:
-        """Missing pieces and image problems, before any build."""
-        self.reports = forensics.inspect(self.m, self.folder, classify=classify)
-        return analyze(self.m, self.folder) + forensics.findings(self.reports)
-
-    # ------------------------------------------------------------ build, fit
+    def findings(self) -> list[Finding]:
+        self.reports = images.inspect(self.m, self.folder)
+        return analyze(self.m, self.folder) + images.findings(self.reports)
 
     def tex_path(self) -> Path:
         return self.folder / "paper.tex"
 
+    def _figure_numbers(self, graphics):
+        numbers = {image: n for n, figure in enumerate(self.m.figures(), 1) for image in figure.images}
+        return {graphic.index: numbers.get(graphic.path) for graphic in graphics}
+
     def build(self, rules: Rules) -> BuildResult:
-        """Write the IEEE LaTeX, compile it once with every figure marked,
-        measure the figures, then strip the marks to leave a clean PDF."""
         latex = render(self.m, self.folder)
         tex = self.tex_path()
-        tex.write_text(latex)
+        tex.write_text(latex, encoding="utf-8")
         marked = tex.with_name("paper-measure.tex")
-        marked.write_text(instrument(latex))
+        marked.write_text(instrument(latex), encoding="utf-8")
         out = self.folder / "build"
         measured_pdf, log = compile_pdf(marked, out)
         if not measured_pdf.exists():
@@ -196,8 +169,7 @@ class Project:
             return self.last_build
         graphics = find_graphics(latex)
         _, figures = measure(measured_pdf, graphics, self.folder)
-        numbers = {img: n for n, fig in enumerate(self.m.figures(), start=1) for img in fig.images}
-        names = {g.index: numbers.get(g.path) for g in graphics}
+        names = self._figure_numbers(graphics)
         pdf = out / "paper.pdf"
         _strip_marks(measured_pdf, pdf)
         try:
@@ -211,10 +183,9 @@ class Project:
         return self.last_build
 
     def fit(self, rules: Rules) -> list:
-        """Fit the figures. Returns one report, or two when readable figures
-        and the page limit conflict, for the user to choose between."""
         tex = self.tex_path()
-        tex.write_text(render(self.m, self.folder))
+        latex = render(self.m, self.folder)
+        tex.write_text(latex, encoding="utf-8")
         readable = fit_paper(tex, self.folder / "build", rules, "readable")
         options = [readable]
         if readable.pages_after > rules.page_limit:
@@ -224,18 +195,16 @@ class Project:
                     options.append(within)
             except FitFailed:
                 pass
-        # the fitter counts every \includegraphics; name them as the paper does
-        numbers = {img: n for n, fig in enumerate(self.m.figures(), start=1) for img in fig.images}
-        paths = {g.index: g.path for g in find_graphics(tex.read_text())}
+
+        numbers = self._figure_numbers(find_graphics(latex))
         for report in options:
             for change in report.changes:
-                number = numbers.get(paths.get(change.index))
+                number = numbers.get(change.index)
                 change.name = f"Fig. {number}" if number else "Image in the text"
         return options
 
     def apply_fit(self, report) -> None:
-        """Keep a fitted layout: each single-image figure remembers its width."""
-        fitted = report.fitted_tex.read_text()
+        fitted = report.fitted_tex.read_text(encoding="utf-8")
         for graphic in find_graphics(fitted):
             width = re.search(r"width=([^,\]]+)", graphic.options)
             for block in self.m.figures():
@@ -243,8 +212,6 @@ class Project:
                     block.fit_width = width.group(1).strip()
                     block.double = graphic.env == "figure*"
         self.save()
-
-    # ------------------------------------------------------------ export
 
     def report_markdown(self, findings: list, issues: list) -> str:
         lines = [f"# Prarup report: {self.m.title or self.source.name}", "",
@@ -260,22 +227,21 @@ class Project:
                 lines.append(f"- **{item.severity.upper()}** {item.code}: {item.message}")
             lines.append("")
         if self.reports:
-            lines += ["## Figure images", "", "| Figure | File | Pixels | Printed dpi | AI evidence |",
-                      "|---|---|---|---|---|"]
+            lines += ["## Figure images", "", "| Figure | File | Pixels | Printed dpi |",
+                      "|---|---|---|---|"]
             for r in self.reports:
                 lines.append(f"| {r.figure} | {Path(r.path).name} | {r.width_px}×{r.height_px} | "
-                             f"{r.dpi:.0f} | {r.verdict} |")
+                             f"{r.dpi:.0f} |")
             lines.append("")
         return "\n".join(lines)
 
     def export(self, destination: Path, rules: Rules) -> Path:
-        """A submission archive: PDF, LaTeX source, images, bibliography, report."""
         result = self.build(rules)
         if not result.ok:
             raise RuntimeError("the paper does not compile, so there is nothing to export:\n"
                                + result.log)
         findings = self.findings()
-        tex = self.tex_path().read_text()
+        tex = self.tex_path().read_text(encoding="utf-8")
         used = sorted(set(re.findall(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}", tex)))
         destination = Path(destination)
         with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as z:
@@ -295,7 +261,6 @@ class Project:
 
 
 def _strip_marks(marked: Path, clean: Path) -> None:
-    """Remove the invisible prarup:fig links used for measuring."""
     with pymupdf.open(marked) as doc:
         for page in doc:
             for link in page.get_links():
@@ -305,7 +270,6 @@ def _strip_marks(marked: Path, clean: Path) -> None:
 
 
 def _small_text(figures: list, rules: Rules, names: dict) -> list:
-    """GEOM-03: a figure whose text prints smaller than the readable minimum."""
     issues = []
     for m in figures:
         if m.text_pt is not None and m.text_pt < rules.min_figure_text_pt - 0.05:
@@ -319,7 +283,6 @@ def _small_text(figures: list, rules: Rules, names: dict) -> list:
 
 
 def _readable_error(log: str) -> str:
-    """The first LaTeX error in a compile log, in a form a person can act on."""
     lines = [l for l in log.splitlines() if l.startswith("error:") or l.startswith("!")]
     first = next((l for l in lines if "XeTeX engine" not in l and "something bad" not in l), "")
     where = re.search(r"paper\.tex:(\d+)", first)
