@@ -16,7 +16,7 @@ and start the app.
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m prarup.ui.window
+.\.venv\Scripts\python.exe -m prarup.main
 ```
 
 Install Pandoc to read manuscripts and Tectonic to build PDFs. Ghostscript
@@ -57,5 +57,3 @@ $env:Path = "$(Resolve-Path .venv/Scripts);$env:Path"
 ```
 
 Tests that require an unavailable external program are skipped.
-For the command line, run `.\.venv\Scripts\python.exe -m prarup.main --help`
-from the project folder.

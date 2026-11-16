@@ -4,11 +4,7 @@ Fitting a figure into a column is easy. Fitting it **without making its text
 unreadable** is the hard part, and no tool we know of does it. This document
 explains how Prarup does.
 
-```bash
-python -m prarup.main fit paper.docx      # or paper.tex
-```
-
-In the window: open the paper, **Build**, then **Fit figures**.
+In the window: open the paper, click **Build PDF**, then **Fit figures**.
 
 ---
 
@@ -152,7 +148,8 @@ min_figure_text_pt: 7.0
 7 pt is **our choice, not an IEEE rule**: just under IEEE's 8 pt footnotes. A
 default matplotlib figure (6.4 in wide, 10 pt text) printed one column wide
 carries 5.5 pt text, so it fails this unless drawn smaller or moved across both
-columns. Override per run with `prarup fit paper.tex --min-figure-text 6`.
+columns. To change this setting, edit `min_figure_text_pt` in
+`prarup/presets/ieee.yaml` and restart the app.
 
 ---
 

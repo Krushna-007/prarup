@@ -51,7 +51,10 @@ class Manuscript:
         return next((b for b in self.blocks if b.id == block_id), None)
 
     def save(self, path: Path) -> None:
-        Path(path).write_text(json.dumps(asdict(self), indent=1))
+        data = vars(self).copy()
+        data["authors"] = [vars(author) for author in self.authors]
+        data["blocks"] = [asdict(block) for block in self.blocks]
+        Path(path).write_text(json.dumps(data, indent=1))
 
     @classmethod
     def load(cls, path: Path) -> "Manuscript":

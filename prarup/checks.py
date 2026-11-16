@@ -158,7 +158,7 @@ class PdfChecks:
                             issues.append(Issue(
                                 code="GEOM-02",
                                 message=(f"a figure on page {number} runs {over:.0f} pt past "
-                                         f"its column. Use Fit figures (prarup fit) to resize it"),
+                                         f"its column. Use Fit figures to resize it"),
                                 severity="error",
                                 can_fix=False,
                             ))
