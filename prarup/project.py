@@ -145,8 +145,8 @@ class Project:
         block.fit_width = ""
         self.save()
 
-    def findings(self) -> list[Finding]:
-        self.reports = images.inspect(self.m, self.folder)
+    def findings(self, classify: bool = False) -> list[Finding]:
+        self.reports = images.inspect(self.m, self.folder, classify)
         return analyze(self.m, self.folder) + images.findings(self.reports)
 
     def tex_path(self) -> Path:
