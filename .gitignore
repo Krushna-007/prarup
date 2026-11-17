@@ -18,3 +18,4 @@ venv/
 *.blg
 build/
 *.egg-info/
+viva/build/

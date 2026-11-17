@@ -1,0 +1,58 @@
+@purpose
+Finds and edits the `\includegraphics` commands in a LaTeX text. Two jobs:
+- **Find** every graphic, with its options, its path and the figure environment around it (`find_graphics`), and say if it cannot be resized safely (more than one graphic in the figure, inside a sub-figure box, rotated, or not in a figure at all).
+- **Change** the text: set a new width and switch between `figure` and `figure*` (`resize`), or wrap every graphic in an invisible marker so its position on the PDF page can be measured (`instrument`).
+
+`MEASURE_HOOK` is LaTeX added before `\begin{document}` when measuring. It writes the page geometry into the PDF's information, and defines `\prarupfig{N}{graphic}`, which draws the graphic inside an invisible PDF link whose address is `prarup:fig:N`. After compiling, Python finds those links, and their rectangles are exactly where each graphic was drawn.
+
+@imports
+`re` and the `Graphic` class.
+
+== _comment_spans
+Returns the start and end of every LaTeX comment (`%` to end of line, not `\%`). Graphics inside comments must be ignored.
+? Why care about comments?
+! Authors often leave old `\includegraphics` lines commented out; resizing those would change nothing and confuse the numbering.
+
+== _in_any
+True if a position falls inside any of the given spans. `any(...)` stops at the first True.
+? What is a span here?
+! A `(start, end)` pair of positions in the text, end not included.
+
+== _figure_envs
+Pairs every `\begin{figure}` with its `\end{figure}` using a **stack** (`open_`): a begin is pushed, an end pops the latest begin. This handles nesting correctly. Returns `(name, begin_span, end_span)` for each environment.
+? Why a stack?
+! The last environment opened is the first closed. A stack (push on begin, pop on end) matches pairs correctly even when they are nested.
+
+== find_graphics
+Finds every graphic outside comments, numbers them from 1, and fills a `Graphic` for each. For each one it finds the innermost figure environment containing it (`max(inside, key=...)` picks the one that starts latest), then decides if it can be resized: not if the figure has several graphics, contains a nested box like `subfigure` or `minipage`, or the graphic is rotated; and not if it is outside any figure.
+? Why can't a figure with two graphics be resized automatically?
+! The graphics share the width in a layout the author chose; changing one width or switching to `figure*` would break that layout.
+? How does it choose the innermost environment?
+! Of all environments that contain the graphic, the one that begins latest is the innermost.
+
+== _split_options
+Splits graphic options like `width=0.5\columnwidth,trim={1 2 3 4},clip` on commas, but **not** on commas inside braces, by tracking brace depth. `(char == "{") - (char == "}")` adds 1 for `{` and subtracts 1 for `}` (True counts as 1).
+? Why not just options.split(",")?
+! `trim={1,2,3,4}` contains commas inside braces; a plain split would cut it into pieces.
+? How does `(char == "{") - (char == "}")` work?
+! Comparisons give True or False, which count as 1 and 0 in arithmetic.
+
+== set_width
+Removes every size option (width, height, scale...) and adds the new `width=...`, keeping other options like `trim` and `clip`.
+> set_width("height=3cm,clip", "0.8\\columnwidth")  ->  "clip,width=0.8\\columnwidth"
+? Why remove height as well as width?
+! With both set, the image would be stretched out of shape; with width only, LaTeX keeps the aspect ratio.
+
+== resize
+Applies a set of changes `{graphic_number: (width, double)}` to the LaTeX: replaces each graphic command, and changes `figure` to `figure*` (or back) when needed. The edits are applied **from the end of the text backwards** (`sorted(edits, reverse=True)`), so earlier positions stay valid.
+? Why apply edits from the end backwards?
+! Replacing text changes its length, which shifts every position after it. Working backwards, the positions still to be used are all before the change and stay correct.
+? What does `(*g.env_begin, text)` build?
+! A tuple `(start, end, text)`: `*` unpacks the `(start, end)` pair into the new tuple.
+
+== instrument
+Returns a copy of the LaTeX with every graphic wrapped in `\prarupfig{N}{...}` and `MEASURE_HOOK` inserted before `\begin{document}`. Graphics are wrapped from last to first for the same reason as in `resize`.
+? How does Prarup find where each figure landed on the page?
+! Each graphic is wrapped in an invisible PDF link named `prarup:fig:N`. After compiling, PyMuPDF lists the links on each page with their rectangles.
+? Does the user's PDF contain these links?
+! No. `Project.build` removes them (`_strip_marks`) before saving `paper.pdf`.

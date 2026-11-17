@@ -1,0 +1,46 @@
+@purpose
+The **outline** on the left: every part of the paper as one row with a tag (TITLE, AUTH, ABS, KEY, H1, P, FIG 3, TAB 2, EQ, REF) and a short text. A row with a problem is red and starts with ⚠; an empty field reads "(no abstract)" in grey. Clicking a row tells the window which block to edit.
+
+It is a `ttk.Treeview` used as a table (`show="headings"`). Each row's id (`iid`) is the block's id ("b12"), or "title", "authors", "abstract", "keywords", so a selected row tells us its block directly.
+
+@imports
+`re` (cleaning text), `ttk`, and two colours from style.
+
+== plain
+Makes one readable line from Markdown: removes pandoc attributes like `{#fig:1}`, backslash escapes (`1\.` becomes `1.`), bold, code and superscript marks, squeezes spaces, and cuts to 70 characters with "…". Maths is kept.
+> plain("**Z-Score** $= \\frac{x - u}{\\sigma}$ (1)")  ->  "Z-Score $= \\frac{x - u}{\\sigma}$ (1)"
+? Why clean the text for the outline?
+! Raw Markdown such as `7^th^` or `**bold**` is hard to read in a list.
+
+== Outline
+A frame holding the tree and its scrollbar.
+
+== Outline.__init__
+Creates the two-column tree, colour tags for problem and empty rows, and a scrollbar linked both ways (`command=self.tree.yview` and `yscrollcommand=scroll.set`). Binds `<<TreeviewSelect>>` (Tk's "selection changed" event) to `_selected`.
+* Dependency Inversion through a callback: the outline is given a function `on_select`, not the MainWindow. It works with anything that accepts a block id, which is why it can be tested alone.
+? How are the scrollbar and tree linked?
+! The scrollbar's command scrolls the tree, and the tree's yscrollcommand moves the scrollbar; both directions are needed.
+? What is <<TreeviewSelect>>?
+! A virtual event Tk sends when the selected row changes, by click or by code.
+
+== Outline._selected
+Passes the selected row's id to the window's callback.
+
+== Outline.add
+Inserts one row with its tag and text. Problems make it red with ⚠; text starting with "(" (a placeholder like "(no caption)") makes it grey.
+
+== Outline.show
+Refills the whole list from the manuscript and findings:
+- findings are grouped by block (title-block findings use META codes to find their row);
+- the selected row is remembered, the tree emptied, the four title-block rows added, then one row per block with its tag (figures and tables numbered in order);
+- the previously selected row is selected again.
+? How does a META-03 finding mark the ABS row?
+! A dictionary maps META-01..04 to the keys title, authors, abstract, keywords; the problem is stored under that key.
+? Why remember and restore the selection?
+! Refilling deletes every row; without restoring, the user would lose their place after every edit.
+
+== Outline.selected
+The id of the selected row, or None.
+
+== Outline.select
+Selects a row by id and scrolls it into view (`see`), if it exists.

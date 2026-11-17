@@ -1,0 +1,115 @@
+@purpose
+Small plain classes that carry data between the parts of the program. They have almost no behaviour; each `__init__` simply stores its arguments on `self`. Knowing what each one holds is enough to read the rest of the code:
+- `Issue`: one problem found in the **compiled PDF** (fonts, page count, figure overflow).
+- `Rules`: the conference's numbers (6 pages, 2 columns, 10 pt body, 7 pt minimum figure text), read from `presets/ieee.yaml`.
+- `Author`: a name and an affiliation.
+- `Graphic`: one `\includegraphics` found in the LaTeX text, with where it is.
+- `Measured`: where that graphic landed on the PDF page, and how big its text printed.
+- `Geometry`: the page's column width, text width, left margin and column gap.
+- `FigureChange` and `FitReport`: what Fit figures changed, and the overall result.
+
+@imports
+`Path` and `yaml` (PyYAML, to read the rules file).
+
+== Issue
+A PDF problem. `can_fix` says whether **Fix PDF** can repair it automatically (missing fonts can be embedded; a figure that is too wide cannot).
+
+== Issue.__init__
+Stores the four values. `can_fix=False` is a default argument: callers may leave it out.
+? What is `self` here?
+! The new object being created. `self.code = code` stores the argument on that object so it can be read later as `issue.code`.
+? What is the difference between Issue and analyze.Finding?
+! `Finding` is about the manuscript before building (missing abstract...); `Issue` is about the compiled PDF (fonts, pages). Both have a code, a severity and a message, so the window can list them the same way.
+
+== Rules
+The conference's limits. Four numbers with IEEE defaults.
+
+== Rules.__init__
+Stores the limits; every argument has a default, so `Rules()` alone gives the IEEE rules.
+? Why does every argument have a default?
+! So `Rules()` works without a file (tests use it), and a YAML file only needs to list what differs.
+
+== Rules.load
+A classmethod that builds a `Rules` from a YAML file.
+- `yaml.safe_load` reads the file into a dict (`or {}` handles an empty file).
+- `vars(cls())` makes a default Rules and lists its attribute names: these are the known keys.
+- Any key in the file that is not known raises a clear `ValueError` (catches typos like `page_limt`).
+- `cls(**data)` passes the file's values as keyword arguments.
+* Open/Closed through configuration: limits live in `presets/ieee.yaml`, so another conference's numbers need a new file, not new code.
+? Why safe_load and not load?
+! `safe_load` only builds plain data (dicts, lists, numbers). Full `load` can run arbitrary Python from a malicious file.
+? How does it know the valid keys?
+! It makes a default object and asks for its attributes with `vars()`, so the list can never go out of date.
+
+== Author
+One author: a name and an affiliation (department, university, email).
+
+== Author.__init__
+Stores name and affiliation; affiliation defaults to "".
+? Why is affiliation optional?
+! The author reader often meets the name first and the affiliation on a later line; it creates `Author(name)` and attaches the affiliation afterwards.
+
+== Author.__eq__
+Defines `==` for authors: same name and same affiliation. Returning `NotImplemented` for a non-Author lets Python try the comparison the other way round (and finally say not equal) instead of crashing.
+* Polymorphism through operator overloading: `==` behaves the way an Author needs.
+? Without __eq__, what would Author("A") == Author("A") give?
+! False: by default `==` compares identity (are they the same object), not contents.
+? Why return NotImplemented and not False?
+! It is Python's signal for "I do not know how to compare with that type", so Python can try the other object's `__eq__`.
+
+== Graphic
+One `\includegraphics` in the LaTeX: its number in order (`index`), where it starts and ends in the text, its options (like `width=0.5\columnwidth`), the file path, the figure environment around it (`figure` or `figure*`) with that environment's start and end positions, and a `reason` it cannot be resized (empty if it can).
+
+== Graphic.__init__
+Stores the fields. `env_begin=(0, 0)` uses tuples, which cannot be changed, so a shared default is safe.
+? Why is a tuple default safe when a list default is not?
+! Tuples are immutable: nobody can change the shared default by mistake.
+
+== Measured
+Where one graphic was drawn on the PDF: page number, the box corners `x0, y0, x1, y1` in points, how far it runs past its column (`overflow`), and its text size relative to its width (`text_per_width`), with where that size came from (vector text or OCR).
+
+== Measured.__init__
+Stores the fields.
+? What unit are x0 and x1 in?
+! PDF points: 72 points make one inch.
+
+== Measured.width
+A **property**: computed from the corners, but read like a field (`m.width`, no brackets).
+* Encapsulation: the width is derived from the corners, so it can never disagree with them.
+? What does @property do?
+! It turns a method into something read like an attribute, so `m.width` runs the method and returns `x1 - x0`.
+
+== Measured.text_pt
+The printed text size in points: text size per point of width, times the width. Stored per width so the fitter can predict the new text size at any new width without compiling again. None if no text was found.
+? Why store text per width instead of text size directly?
+! Text scales with the figure. If the figure is made 1.5 times wider, the text becomes 1.5 times bigger; storing the ratio makes that prediction one multiplication.
+
+== Geometry
+The page layout read back from the compiled PDF: column width, full text width, left margin and the gap between columns, all in points.
+
+== Geometry.__init__
+Stores the four numbers.
+? Where do these numbers come from?
+! The template writes them into the PDF's information dictionary (`PrarupGeometry`) while compiling, so Python can read the real values LaTeX used.
+
+== Geometry.bounds
+Returns the left and right edge a figure may use. A double-column figure (or a one-column page) may use the full text width. Otherwise the figure belongs to the column it starts in: left column if it starts left of the column's right edge, else right column.
+> left=54, column=252, gap=14: a figure starting at x=320 -> right column -> (320, 572)
+? How does it know which column a figure is in?
+! By where the figure starts: if `x0` is left of the first column's right edge it is in the left column.
+
+== FigureChange
+What Fit figures did to one graphic: width before and after, one or two columns before and after, how far it overflowed before, text size before and after, a note, and a display `name` like "Fig. 4".
+
+== FigureChange.__init__
+Stores the fields.
+? Why keep the before values too?
+! The Figure fit tab shows "Fig. 4: 3.9 pt -> 7.0 pt", so both are needed.
+
+== FitReport
+The result of one fitting run: all changes, pages before and after, the page limit, the fitted .tex and PDF, a summary, which policy was used ("readable" or "limit") and the minimum text size.
+
+== FitReport.__init__
+Stores the fields.
+? Why can Fit figures return two FitReports?
+! When readable figures push the paper past the page limit, it makes a second layout that stays within the limit, and the user chooses.

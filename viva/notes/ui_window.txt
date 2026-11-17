@@ -1,0 +1,186 @@
+@purpose
+The **main window** and every button's action. Layout:
+- top: the toolbar (Open, Build, Fit figures, Fix PDF, Export, the AI classifier tick box, the file name);
+- left: the outline of the paper (`Outline`);
+- middle: the editor for the chosen block, above the tabs Missing / Images / PDF checks / Figure fit / Notes (`Panels`);
+- right: the PDF (`PdfPreview`);
+- bottom: a status line.
+
+**The one idea to explain in the viva: how the window stays responsive.** Building a PDF takes seconds. If it ran on the window's own thread, the window would freeze. So slow jobs run on **one background thread** (`ThreadPoolExecutor(max_workers=1)`). Tkinter is **not thread-safe**: only the main thread may touch widgets. So the background thread only computes and returns a value; the main thread checks every 80 ms with `root.after(80, check)` whether the job is done, and if so draws the result itself.
+
+**Auto-rebuild:** after an edit, a build is scheduled 1.5 s later (`schedule_build`). Another edit within that time cancels the timer and starts it again, so typing does not start many builds. If an edit arrives while a build is running, `rebuild_waiting` is set and one more build runs when it finishes.
+
+> Click a ⚠ row in Missing
+>   -> ProblemList._clicked -> MainWindow.jump(block_id) -> Outline.select + show_block
+>   -> save_editor (keep what was typed) -> make_editor -> editor_for(...) -> FigureEditor
+> Type a caption, click Save
+>   -> save_editor -> FigureEditor.save -> Project.set_caption -> manuscript.json written
+>   -> refresh_after_edit -> refresh (findings again, outline, tabs, editor) -> schedule_build(1500 ms)
+>   -> build -> run(job=Project.build) ... background thread ... check() every 80 ms -> built -> PdfPreview.load
+
+@imports
+`sys` (command-line argument), `tkinter` and its `ttk` widgets, `filedialog` and `messagebox` (dialogs), `ThreadPoolExecutor` (the background thread), `Path`. From Prarup: `images` (is the classifier installed), `run_all_checks` and `embed_fonts` (Fix PDF), `describe` (Figure fit text), `Rules`, `Project`, and the other window parts: `style`, `editor_for`, `Outline`, `Panels`, `PdfPreview`. `PAPERS` is the file-type filter for the Open dialog; `REBUILD_AFTER_MS` is the 1.5 s delay.
+
+== MainWindow
+The window object. One is created by `main()`; it keeps the open `Project` and all widgets.
+* Single Responsibility is the weakest here: MainWindow lays out the window and handles every action. It stays readable because each action is a short method that calls Project; splitting it further is a possible improvement.
+? Why is MainWindow a plain class and not a subclass of tk.Tk?
+! It receives the root window and builds widgets into it. Keeping it a plain class keeps the code simple, and tests can pass in a root they made.
+
+== MainWindow.__init__
+Sets up state, then builds the window.
+- State: no project yet, the IEEE rules from `presets/ieee.yaml`, the one-thread worker, `busy` flag, rebuild timer, current findings, current block `key` and `editor`.
+- `self.choose_fit = self.ask_fit`: storing a method in a variable lets tests replace the Fit dialog with a function that answers automatically.
+- `tk.BooleanVar` and `tk.StringVar` are Tk variables: a widget connected to one updates itself whenever the variable changes (the status line, the tick box).
+- `root.protocol("WM_DELETE_WINDOW", self.close)` runs `close` when the user clicks the window's close button.
+- `ttk.PanedWindow` makes columns separated by draggable dividers; `weight` says how extra space is shared when the window is resized.
+- `root.after(200, self.place_dividers)` waits until the window is drawn, then places the middle divider.
+* Dependency injection: `choose_fit` is stored in a variable, so tests inject an automatic choice instead of a dialog.
+? How does the status line update itself?
+! It is a Label with `textvariable=self.status`; calling `self.status.set(...)` anywhere updates the label.
+? What does root.protocol("WM_DELETE_WINDOW", ...) do?
+! It replaces what happens when the user closes the window, so Prarup can refuse while a build is running.
+? Why is the rules file path built with `Path(__file__).resolve().parents[1]`?
+! `__file__` is this file (prarup/ui/window.py); `parents[1]` is the `prarup` folder, where `presets/` lives. It works wherever the project is.
+
+== MainWindow.place_dividers
+Gives the editor about 60% of the middle column's height and the tabs the rest. `update_idletasks()` makes Tk finish laying out the window first, so the height is known.
+? Why not set the size when creating the panes?
+! Widgets have no real size until the window has been drawn; this runs 200 ms later, when it has.
+
+== MainWindow.make_toolbar
+Builds the toolbar: the Prarup name, one button per action (Build in the orange accent style), the AI classifier tick box (disabled with "(not installed)" if torch and transformers are missing), and the file name on the right. Buttons are kept in a dict by name so `enable` can turn them on and off.
+? Why keep the buttons in a dictionary?
+! `enable` needs to switch them on and off by name, for example Fix PDF only when a PDF exists.
+? Why `command=command` and not `command=command()`?
+! The button must store the function to call later; `command()` would call it immediately while building the toolbar.
+
+== MainWindow.enable
+Turns each button on or off: Open is always available unless busy; the others need an open paper; Fix PDF also needs a built PDF.
+? Why disable buttons while busy?
+! There is one background thread. Starting a second job while one runs would be lost or would read half-finished files.
+
+== MainWindow.run
+The heart of the responsiveness. Starts `job` on the background thread and arranges for `done(result)` to run on the main thread when it finishes.
+- If already busy, it does nothing.
+- `self.worker.submit(job)` starts the job and returns a **Future**: a placeholder for a result that does not exist yet.
+- The nested `check` function looks at `future.done()`. Not done: ask Tk to call `check` again in 80 ms. Done: clear `busy`, call `done(future.result())`, which raises if the job raised, so any error is shown in a message box.
+- Afterwards, if an edit came in during the job, build again.
+* Producer and consumer with a Future: the worker thread produces a result; the main thread consumes it. Tk's `after` polling replaces locks.
+? Why not update the widgets from the background thread?
+! Tkinter is not thread-safe; touching widgets from another thread can crash or corrupt the window. The thread only computes; the main thread draws.
+? What is a Future?
+! An object representing a result that will exist later. `done()` says if it is ready; `result()` returns it, or raises the job's exception.
+? Why does check call root.after instead of waiting in a loop?
+! A waiting loop would block the main thread, freezing the window. `after` returns at once and Tk calls `check` again later, while still drawing and handling clicks.
+? Why only one worker thread?
+! Jobs write to the same project folder; running two at once could make them overwrite each other's files.
+
+== MainWindow.close
+Refuses to close during a job (files may be half written); otherwise stops the worker and destroys the window.
+? What does worker.shutdown() do?
+! Tells the thread pool no more jobs will come and lets its thread finish, so Python can exit cleanly.
+
+== MainWindow.choose_file
+Shows the Open dialog filtered to .docx, .tex and .zip, and opens the chosen file.
+
+== MainWindow.open_file
+Saves the current editor quietly, then opens the paper on the background thread: the job is `Project.open(path)` (wrapped in a lambda so it is called later on the thread), and `opened` runs when it finishes.
+? Why wrap Project.open in a lambda?
+! `run` needs a function to call later on the thread. `lambda: Project.open(path)` is that function; writing `Project.open(path)` would run it now, on the main thread.
+
+== MainWindow.opened
+Runs on the main thread with the opened Project: stores it, sets the title and file label, clears the preview and PDF checks, refreshes everything, selects the title, shows how many items need attention, and starts the first build at once (`schedule_build(0)`).
+
+== MainWindow.refresh
+Runs the checks on the manuscript (`Project.findings`, with the classifier if ticked), then redraws the outline, the tabs, and the editor of the current block (or no editor if that block no longer exists).
+? When is refresh called?
+! After opening, after every edit, after fitting and when the AI box is ticked: whenever the manuscript or the checks may have changed.
+
+== MainWindow.show_block
+Called when the user clicks a row in the outline. If it is the block already shown, nothing happens (this also stops Tk's delayed select events from rebuilding the editor). Otherwise whatever was typed in the current editor is saved first; if that changed something, everything is refreshed and the new block shown, else only the editor is replaced.
+? Why save the editor before switching blocks?
+! The user may have typed without clicking Save. Saving on switch means typed text is never lost.
+? Why ignore a click on the block already shown?
+! Refilling the outline re-selects the current row, which fires a select event; without the check the editor would be rebuilt and lose the cursor position.
+
+== MainWindow.make_editor
+Destroys the old editor widget and creates the right one for `key` with `editor_for`, filling the middle area.
+? Why destroy and recreate the editor instead of updating it?
+! Each kind of block has a different editor; recreating is simpler than reusing widgets, and it always shows the latest data.
+
+== MainWindow.jump
+Called when a row in a tab is clicked: selects that block in the outline and shows its editor.
+
+== MainWindow.save_editor
+Asks the current editor to save. A `ValueError` from the editor (for example a wrong number of references) is shown as a message. When not `quiet`, a change triggers a refresh and rebuild, and no change shows "Nothing to save.". Returns the editor's message.
+? What does the quiet flag change?
+! When saving on the way to something else (switching blocks, building), no refresh or "Nothing to save" is wanted; the caller handles it.
+? Why does the editor return a message instead of telling the window directly?
+! If the editor told the window during saving, the window would rebuild the editor while it was still running its own save, which crashed the first version.
+
+== MainWindow.refresh_after_edit
+After any edit: optionally select a new block, refresh everything, re-select the block in the outline, show the message, and schedule a rebuild.
+
+== MainWindow.move
+Saves the editor, moves the current block up or down through `Project.move`, refreshes.
+
+== MainWindow.insert
+Saves the editor, inserts a new paragraph or figure after the current block, and selects the new block.
+
+== MainWindow.delete_block
+Asks "Delete this block?", then deletes it through the Project; no block is selected afterwards.
+? Why ask before deleting?
+! Deleting is the one edit that removes the user's content; a confirmation prevents mistakes.
+
+== MainWindow.set_image
+Saves the editor, then replaces or adds an image in the current figure through the Project.
+
+== MainWindow.remove_image
+Saves the editor, then removes one image from the current figure.
+
+== MainWindow.toggle_ai
+Runs when the AI classifier box is ticked or unticked: refreshes the findings (the classifier now runs, or not) and explains in the status line that it only runs on photos.
+
+== MainWindow.schedule_build
+Starts (or restarts) the rebuild timer: an existing timer is cancelled with `after_cancel`, and a new one calls `build` after `delay` ms.
+* Debounce pattern: a burst of events produces one action, after the events stop.
+? Why cancel the previous timer?
+! So a burst of edits produces one build 1.5 s after the last edit, not one build per keystroke.
+? What does root.after return?
+! An id for the scheduled call, which `after_cancel` needs to cancel it.
+
+== MainWindow.build
+Builds the PDF on the background thread. If no paper is open it does nothing; if a job is running it sets `rebuild_waiting` so the build runs afterwards. It saves the editor first, so the build includes what was just typed.
+
+== MainWindow.built
+Runs on the main thread after a build: shows the PDF and the PDF checks, and a status line with pages and counts, or the LaTeX error in a message box.
+
+== MainWindow.fit
+Saves the editor and runs `Project.fit` on the background thread; `fitted` handles the result.
+
+== MainWindow.fitted
+If there is one layout, uses it; if two, asks the user (`choose_fit`). Cancel leaves the figures alone. Otherwise the layout is applied to the manuscript, described in the Figure fit tab, and the paper rebuilt.
+? Why call build with root.after(0, ...)?
+! `fitted` runs inside `run`'s check while `busy` is being finished; scheduling the build for the next moment lets that finish cleanly first.
+
+== MainWindow.ask_fit
+A Yes / No / Cancel dialog: readable figures (over the limit) or within the limit (some text below the minimum). Returns the chosen report or None.
+? Why is this not called directly?
+! It is stored in `self.choose_fit`, so tests can replace it and choose without a dialog.
+
+== MainWindow.fix
+If nothing in the PDF can be repaired automatically, it explains that missing items must be fixed in the editor. Otherwise Ghostscript rewrites the PDF as `paper-fixed.pdf` on the background thread, the checks run again, and `built` shows the result.
+
+== MainWindow.export
+Shows a Save dialog (suggesting `<paper>-submission.zip`) and exports there.
+
+== MainWindow.export_to
+Saves the editor and runs `Project.export` on the background thread; the status line says what was saved. Separate from `export` so tests can export without a dialog.
+
+== main
+Creates the Tk root window and the MainWindow, opens a paper given on the command line (`sys.argv[1]`), and starts Tk's **event loop** (`root.mainloop()`), which waits for clicks and key presses until the window closes.
+? What is mainloop?
+! Tk's event loop: it waits for events (clicks, keys, timers) and calls the matching functions, until the window is closed.
+? What is sys.argv?
+! The list of command-line words; `sys.argv[0]` is the program, `sys.argv[1]` the first argument (a paper to open).

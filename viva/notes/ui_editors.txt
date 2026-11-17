@@ -1,0 +1,115 @@
+@purpose
+One **editor class for each kind of block**, shown in the middle of the window. They all inherit from `Editor`, which draws the heading and the problems for that block and offers shared helpers. Each subclass adds its own fields and its own `save()`.
+
+The rule every editor follows: **`save()` writes what was typed through the Project and returns a message** ("Caption saved.", or "" if nothing changed). It never redraws the window itself; buttons call window methods, and the window redraws. (An early version redrew during save and crashed, because it destroyed the editor that was still saving.)
+
+> FrontEditor       title, authors (Name | Affiliation per line), abstract, keywords
+> TextEditor        paragraph / heading / quote (re-taggable), list, equation, code, raw
+> FigureEditor      image cards (thumbnail, pixels, dpi, AI evidence, Replace / Remove), caption
+> TableEditor       caption and a grid of cells
+> ReferencesEditor  one reference per line (read-only when they come from a .bib file)
+
+@imports
+`Path`, `filedialog` (choose an image), `ttk` widgets, Pillow's `Image` and `ImageTk` (thumbnails), `pandoc` (table cells), `Author`, and the field helpers `entry` and `text_box` from style. `IMAGE_TYPES` filters the image dialog.
+
+== Editor
+The base class of all editors: a `ttk.Frame` (a box of widgets) with a heading and the block's problems.
+* Inheritance and the Liskov Substitution Principle: the window holds 'an editor' and calls `save()` and `destroy()` on it without knowing which subclass it is. Every subclass keeps that promise: `save()` returns a message string.
+? What is inheritance doing here?
+! Every editor class starts from `Editor`, so the heading, problem list, `label` and `block_buttons` are written once and shared. Each subclass only adds what is different.
+
+== Editor.__init__
+Calls `super().__init__` to create the frame, stores the window, the project and the block key, draws the heading, and draws each problem in a red box (⛔ for errors, ⚠ for warnings).
+? What does super().__init__(parent, padding=12) do?
+! Runs the parent class's `__init__` (ttk.Frame's), which creates the actual Tk widget. Without it the object would not be a working frame.
+
+== Editor.label
+Adds a line of text, normal or grey (a hint).
+
+== Editor.block_buttons
+Adds the row of buttons shared by block editors: Save, move up, move down, + Paragraph, + Figure, and Delete on the right. Each calls a window method; `lambda: w.move(-1)` makes a function that calls `move` with an argument when clicked.
+? Why lambda for the move buttons?
+! A button's command must be a function with no arguments. `lambda: w.move(-1)` is such a function, calling `move(-1)` only when clicked.
+
+== Editor.save
+The default: nothing to save, returns "". Subclasses override it.
+* Polymorphism: one method name, a different behaviour in each subclass (method overriding).
+? What is method overriding?
+! A subclass defines a method with the same name; Python calls the subclass's version for its objects.
+
+== FrontEditor
+Edits the title block: title, authors, abstract, keywords.
+
+== FrontEditor.__init__
+Builds the fields, filled with the current values. Authors are shown one per line as "Name | Affiliation", which is easy to type and to read back. The field matching the clicked outline row gets the keyboard focus (a dict from key to widget, indexed by `key`).
+? Why "Name | Affiliation" lines instead of a table?
+! A text box is the simplest widget that works everywhere; one line per author with a bar is easy to type and easy to split when saving.
+
+== FrontEditor.save
+Reads the fields back. Each author line is split at the first "|" with `partition`; empty lines are skipped. If nothing changed (compared as a tuple with the manuscript's current values), returns ""; else saves through `Project.set_front`.
+? Why compare a tuple of all four values?
+! One comparison tells if anything at all changed; `Author.__eq__` makes the author lists compare by content.
+? What does `get("1.0", "end")` mean on a Text widget?
+! From line 1, character 0, to the end: all the text.
+
+== TextEditor
+Edits text blocks. Paragraphs, headings and quotes can be re-tagged.
+
+== TextEditor.__init__
+Shows how Prarup decided what the block is (`detected`), a "This block is a" drop-down for re-taggable kinds (`ttk.Combobox` in read-only mode), the text, a Markdown hint, and the block buttons.
+
+== TextEditor.save
+Re-tags the block if the drop-down changed, saves the text if it changed (`end-1c` leaves out the newline Tk always adds at the end), and returns "Saved." or "".
+? Why "end-1c" here?
+! A Tk Text widget always ends with an extra newline; "end-1c" means one character before the end, so that newline is not saved into the paper.
+
+== FigureEditor
+Edits a figure: its images and its caption.
+
+== FigureEditor.__init__
+Shows `detected`, one card per image (matched to its `ImageReport` by path), "+ Add image…", the caption box, the fitted width if any, and the block buttons. `self.pictures` keeps every thumbnail.
+? Why keep the thumbnails in self.pictures?
+! Tk does not keep its own reference to a PhotoImage. If Python's last reference disappears, the image is garbage-collected and the label shows nothing.
+
+== FigureEditor.card
+One image card: a thumbnail made with Pillow (`thumbnail` shrinks it, keeping its shape) or "missing", then the file name, pixels, printed dpi (⚠ under 300), the AI verdict and its evidence, the classifier score, a duplicate warning, and Replace / Remove buttons. `lambda: self.choose(index)` remembers which image the button belongs to.
+? How does the card know the dpi and AI evidence?
+! The window passes the image reports from `Project.findings`; the card looks up the report for its path.
+
+== FigureEditor.choose
+Opens the file dialog and passes the chosen image to the window, which replaces (or adds) it through the Project.
+
+== FigureEditor.save
+Saves the caption if it changed.
+
+== TableEditor
+Edits a table's caption and its cells.
+
+== TableEditor.__init__
+Gets the rows from the table's pandoc node (`pandoc.table_rows`) and draws one entry field per cell in a grid (`grid(row=r, column=c)`). Each field is stored with its pandoc cell in `self.cells`, so saving can write back to the right cell.
+? Why grid instead of pack here?
+! `grid` places widgets in rows and columns, which is exactly a table.
+
+== TableEditor.save
+For each cell whose text changed, replaces the cell's content in the pandoc node with the new text; updates the caption; saves the project if anything changed.
+? Why write into the pandoc node?
+! The renderer builds the LaTeX table from the node, so the edited cell appears in the PDF.
+
+== ReferencesEditor
+Edits the reference list, one reference per line.
+
+== ReferencesEditor.__init__
+Shows the references in a text box. If they come from a .bib file, the box is disabled and a hint says to edit the .bib.
+? Why not edit .bib references here?
+! The paper builds from the .bib file with BibTeX; changes here would be ignored.
+
+== ReferencesEditor.save
+Saves the non-empty lines. If the references have citation keys, the number of lines must stay the same (each line belongs to a key), otherwise a `ValueError` is raised and shown.
+? Why must the number of lines stay the same?
+! Each line is matched to a citation key by position; adding or removing lines would attach the wrong text to keys used in the paper.
+
+== editor_for
+A small **factory**: picks the right editor class for an outline row. The four title-block keys get `FrontEditor` (with the META findings); otherwise the block's kind decides. Figures and tables are given their number (position among figures or tables, plus 1).
+* Factory function and Open/Closed: a new kind of block gets a new Editor subclass and one new line here; no other editor changes.
+? What is a factory function?
+! A function whose job is to decide which class to create and create it, so the caller does not need to know the choice.

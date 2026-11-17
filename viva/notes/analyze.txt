@@ -1,0 +1,59 @@
+@purpose
+Finds **what is missing or wrong in the manuscript**, before anything is compiled. It looks only at the `Manuscript` object (and checks that image files exist). Each problem becomes a `Finding` with a code, so the window can list it in the Missing tab and open the right block when it is clicked.
+
+The codes: META-01..04 title, authors, abstract, keywords; FIG-01 no caption, FIG-02 never mentioned, FIG-03 no image or missing file, FIG-04 a format the PDF cannot hold; TAB-01, TAB-02 the same for tables; REF-01 no references, REF-02 a citation with no reference, REF-03 a reference never cited; STR-01 no Introduction or Conclusion, STR-02 an empty section.
+
+`PLACEABLE` are the formats LaTeX can put in a PDF; `CONVERTIBLE` are formats Pillow can read (not an error).
+
+@imports
+`re`, `dataclass`, `Path`, and `Manuscript` (for the type hint).
+
+== Finding
+One problem in the manuscript: `code`, `severity` ("error" or "warning"), `message`, the `block_id` it belongs to (empty for the title block), and the tab `group` it belongs in ("Missing", "Images" or "Structure").
+? Why does a Finding carry a block_id?
+! So clicking the problem in the window opens that exact block in the editor.
+
+== _cited_keys
+Collects the citation keys used in the text: pandoc Markdown citations `@key` and LaTeX `\cite{a,b}` (also `\citep`, `\citet`). Reference and figure blocks are skipped.
+- `keys.update(...)` adds many items to a set at once.
+? Why is a set used?
+! The same key is usually cited many times; a set keeps each key once, and set difference finds keys with no reference.
+
+== _numeric_citations
+For papers with numbered references ([1], [2-4], [1, 3]): collects every number cited in the abstract and in paragraphs, lists and quotes. A range like 2-4 adds 2, 3 and 4.
+- `\\?\[` allows an escaped bracket `\[`, which is how Markdown stores a literal "[".
+- `map(int, ...)` converts both ends of a range to numbers; `range(a, z + 1)` includes the end.
+> "as shown in [2-4] and [7]"  ->  {2, 3, 4, 7}
+? Why `z + 1` in range?
+! `range` stops before its end value, so `range(2, 5)` gives 2, 3, 4.
+? Why was the abstract added to the search?
+! A real test found a citation in the abstract that was never checked.
+
+== _roman
+Converts a Roman numeral (I, V, X) to a number, because IEEE numbers tables "Table II". It reads right to left: a value smaller than the largest seen so far is subtracted (the I in IV), otherwise added.
+> "IV": V=5 (total 5), I=1 < 5 so subtract (total 4)  ->  4
+? Why read from right to left?
+! Then one rule works: subtract a symbol if a bigger one appeared to its right.
+
+== _mentions
+Finds how the text refers to figures or tables: by label (`(#fig:x)` in Markdown, `\ref{fig:x}` in LaTeX) and by number ("Fig. 3", "Figure 3", "Table II"). Returns two sets: labels and numbers.
+? Why both labels and numbers?
+! LaTeX papers refer by label (`\ref`), Word papers by typed number ("Figure 3"). Either counts as a mention.
+
+== analyze
+Runs every check and returns the list of findings.
+- `add = lambda *a, **k: found.append(Finding(*a, **k))` is a short helper: `add("META-01", "error", "...")` creates a Finding and appends it.
+- **Title block:** title, authors (and each author's affiliation), abstract, keywords.
+- **Figures:** caption, image present, file exists, usable format, mentioned in the text (by label, by position, or by the number it had in the paper).
+- **Tables:** caption, mentioned.
+- **References:** if keys are known (LaTeX/.bib), compare cited keys with reference keys both ways. Otherwise (numbered references) any cited number larger than the reference count is an error, and if at least 3 citations are found, uncited references are listed.
+- **Structure:** Introduction and Conclusion headings; a heading followed directly by another heading of the same or higher level is an empty section (not checked for headings Prarup guessed, to avoid false alarms).
+* Single Responsibility: this file only judges the manuscript; it never edits it and never touches the PDF.
+? What does `*a, **k` in the lambda mean?
+! `*a` collects positional arguments into a tuple, `**k` keyword arguments into a dict, and both are passed on to `Finding`.
+? How is "citation past the references" found?
+! The largest cited numbers are compared with the number of reference entries; [99] in a paper with 50 references is reported.
+? Why only report uncited references when 3 or more citations were found?
+! If almost no citations are recognised, the citation style is probably one we cannot read; reporting every reference as uncited would be noise.
+? Why does STR-02 skip detected headings?
+! A bold paragraph guessed to be a heading may be followed by a real heading; it would be wrongly reported as an empty section.

@@ -1,0 +1,47 @@
+@purpose
+The **tabs under the editor**: Missing, Images, PDF checks, Figure fit and Notes. The first three are lists (`ProblemList`); clicking a row that belongs to a block opens that block. Figure fit and Notes are read-only text boxes. Tab titles show counts, like "Missing (7)".
+
+@imports
+`Path`, `ttk`, two colours and the `text_box` helper from style.
+
+== ProblemList
+A frame with a table (`ttk.Treeview`) and a scrollbar; each row can remember the block it belongs to.
+* DRY and reuse: one class serves three tabs with different columns.
+? Why one ProblemList class for three tabs?
+! Missing, Images and PDF checks all show rows that may point to a block; one class with different columns serves all three.
+
+== ProblemList.__init__
+Creates the columns with the given names and widths (only the last column stretches), red and amber colour tags for errors and warnings, a scrollbar, and the click binding. `self.blocks` maps each row's id to a block id.
+? What does zip(columns, widths) do here?
+! Pairs each column name with its width, so both lists can be walked together.
+
+== ProblemList.fill
+Empties the table and adds one row per `(values, severity, block_id)`, remembering each row's block.
+
+== ProblemList._clicked
+When a row is selected and it belongs to a block, calls the window's jump function with that block id.
+? Why do PDF check rows not jump anywhere?
+! PDF issues are about the compiled file (fonts, pages), not one block; their block id is empty.
+
+== Panels
+The notebook (tabbed box) holding the five tabs.
+
+== Panels.__init__
+Creates the three lists with their columns and the two text boxes, and adds each as a tab.
+
+* Observer / callback: rows call `on_jump` when clicked; the panels do not know who listens.
+== Panels.show_findings
+Fills Missing with every non-image finding, and Images with one row per image report: figure, file, pixels, printed dpi, and AI verdict with its evidence (and duplicates). A declared AI image is red; one with any image finding is amber. Fills Notes, and updates the tab counts.
+? Why is the Images tab built from reports, not only findings?
+! It lists every image, including good ones, so the user sees each one's dpi and AI result, not just the problems.
+
+== Panels.show_checks
+Fills PDF checks with the build's issues and updates the count.
+
+== Panels.show_fit
+Shows the Figure fit lines and switches to that tab.
+
+== Panels.set_text
+Replaces a read-only text box's text: enable it, delete, insert, disable again. A **staticmethod**, because it needs no `self`.
+? Why enable and disable the text box?
+! A disabled Text widget cannot be changed even by code; it is enabled for a moment to change it, then disabled so the user cannot type in it.

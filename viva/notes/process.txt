@@ -1,0 +1,24 @@
+@purpose
+Runs the outside programs Prarup depends on (pandoc, tectonic, ghostscript, tesseract) the same way on every operating system. Every other file goes through these two functions instead of calling `subprocess` itself.
+
+@imports
+`os` (path separator), `shutil` (`which` finds a program on the PATH), `subprocess` (runs programs), `sys` (where Python lives, which platform this is), `Path`.
+
+== find_tool
+Returns the full path of a program, or None. First the normal PATH (`shutil.which(name)`), then two extra places: the folder of the running Python, and a folder named after the tool inside the Python environment, where a teammate on Windows may have unpacked pandoc or tesseract without installing it.
+? What is the PATH?
+! A list of folders the system searches when you type a program's name. `shutil.which` searches it the same way.
+? Why search next to Python as well?
+! On Windows, tools can be placed inside the virtual environment instead of installed system-wide.
+
+== run_tool
+Runs a program and returns the finished result (exit code, output text, error text).
+- `capture_output=True` collects what it prints instead of showing it.
+- `encoding="utf-8"` decodes the output as text; `errors` decides what happens to bad bytes.
+- On Windows `CREATE_NO_WINDOW` stops a black console window from flashing up each time.
+- The `*` in the signature makes `cwd`, `input` and `errors` keyword-only: callers must write `cwd=...`.
+* Dependency Inversion in a small way: every module depends on this one function to run programs, not on `subprocess` and OS details.
+? What does the bare * in the parameter list mean?
+! Every parameter after it must be passed by name, which keeps calls readable and avoids mixing up arguments.
+? Why not use shell=True?
+! Passing a list of arguments runs the program directly; a shell would interpret spaces and special characters in file names, which is fragile and unsafe.

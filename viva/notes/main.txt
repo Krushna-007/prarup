@@ -1,0 +1,14 @@
+@purpose
+The entry point: `python -m prarup.main` runs this file. It only imports `main` from the window and calls it. `if __name__ == "__main__":` is true only when the file is run directly, not when it is imported.
+
+> python -m prarup.main paper.docx
+>   -> prarup/main.py: __name__ == "__main__", so main() runs
+>   -> ui/window.main(): creates tk.Tk(), MainWindow(root), opens paper.docx, root.mainloop()
+
+? What does `if __name__ == "__main__":` mean?
+! Python sets `__name__` to `"__main__"` for the file being run. When the file is only imported, `__name__` is its module name, so the code inside does not run.
+? What does `python -m prarup.main` do differently from `python prarup/main.py`?
+! `-m` runs it as a module of the `prarup` package, so imports like `from prarup.ui.window import main` work from the project folder.
+
+@imports
+`main` from `prarup.ui.window`: the function that builds and starts the window.

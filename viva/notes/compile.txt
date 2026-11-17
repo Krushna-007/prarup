@@ -1,0 +1,24 @@
+@purpose
+Turns a .tex file into a PDF by running **Tectonic**, a LaTeX engine that downloads the packages it needs by itself. One function, plus an exception for when Tectonic is not installed.
+
+@imports
+`Path`, and `find_tool` / `run_tool` from `process.py`.
+
+== TectonicNotFound
+Raised when the `tectonic` program cannot be found, so the window can say exactly that.
+? What should a user do when they see this?
+! Install Tectonic (for example `brew install tectonic`) and open Prarup again.
+
+== compile_pdf
+Compiles one .tex file into `out_dir` and returns the PDF's path and Tectonic's messages.
+- The old PDF is deleted **first** (`unlink(missing_ok=True)`). Tectonic writes nothing when compiling fails; without this, a broken edit would be checked against the last good PDF and reported as fine.
+- `--synctex` also writes a file linking PDF positions to source lines (kept for later use).
+- `errors="replace"` keeps a strange byte in LaTeX's log from crashing the read.
+- The caller checks `pdf_path.exists()` to know if it worked.
+* Single Responsibility: the only place that runs Tectonic.
+? Why delete the old PDF before compiling?
+! If compiling fails, Tectonic writes no PDF. The old one would remain and be checked instead, reporting a broken paper as passing.
+? How does the caller know if compiling failed?
+! The returned PDF path does not exist. The log text explains why.
+? What does missing_ok=True do?
+! `unlink` normally raises an error if the file does not exist; this makes it do nothing instead.

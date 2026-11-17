@@ -1,0 +1,160 @@
+\chapter{How to use this book}
+
+Sir opens a file, points at a few lines and asks: \emph{what does this do?} This book is built for exactly that.
+Every function, class and method in Prarup is here, in the order it appears in its file, with:
+
+\begin{itemize}
+\item the \textbf{real code}, with the \textbf{same line numbers} as in the repository, so you can find what sir is pointing at;
+\item purple \chip{chips} naming the Python features the code uses (dataclass, lambda, regex, recursion\dots);
+\item what it does, step by step, and a \textbf{trace} (a small worked example) where that helps;
+\item \textcolor{sage}{\textbf{Called by}}: which functions use it, found automatically from the code;
+\item an orange box, \emph{If sir points here}, with the questions most likely to come and short answers.
+\end{itemize}
+
+Each file starts with \emph{What this file is for} and \emph{Imports: what comes in}, which also lists who imports the file.
+Read those two first; they explain why the file exists before you read a line of it.
+
+\begin{keyidea}[The three answers that always work]
+\textbf{What does it take, what does it give back, and who calls it.} If you can say those three things about a function,
+and one sentence on \emph{why} it is written that way, you have answered the question.
+\end{keyidea}
+
+This book explains \unitsTotal{} pieces of code and has \questionsTotal{} questions with answers.
+The last chapter collects every question in one place for revision.
+
+\chapter{Prarup in one minute}
+
+\begin{keyidea}[Say this first]
+Prarup is a desktop app that takes a research paper written in Word or LaTeX, shows it as a tagged outline,
+tells you what is missing (abstract, captions, references, image quality, AI-generated images),
+lets you fix it in place, and builds the IEEE conference PDF, checked the way IEEE PDF eXpress checks it.
+It runs offline. The window is Tkinter; the heavy lifting is done by pandoc (reading papers), Tectonic (LaTeX to PDF),
+PyMuPDF (reading PDFs), Pillow (images) and Ghostscript (embedding fonts).
+\end{keyidea}
+
+\section{The whole program on one page}
+
+\begin{center}
+\begin{tikzpicture}[node distance=7mm and 9mm]
+\node[box] (paper) {Word / LaTeX / zip\\\footnotesize the user's paper};
+\node[mod, right=of paper] (ingest) {ingest.py\\\footnotesize pandoc.py};
+\node[box, right=of ingest] (m) {Manuscript\\\footnotesize tagged Blocks};
+\node[mod, below=of m] (an) {analyze.py\\images.py};
+\node[box, below=of an] (win) {Window\\\footnotesize outline \textperiodcentered{} editor \textperiodcentered{} tabs};
+\node[mod, right=of m, xshift=4mm] (ren) {renderer.py\\\footnotesize ieee.tex.j2};
+\node[mod, below=of ren] (comp) {compile.py\\\footnotesize Tectonic};
+\node[mod, below=of comp] (chk) {measure.py\\checks.py};
+\draw[arr] (paper) -- (ingest);
+\draw[arr] (ingest) -- (m);
+\draw[arr] (m) -- node[lab, right]{what is missing} (an);
+\draw[arr] (an) -- (win);
+\draw[arr] (win.west) -- ++(-2mm,0) |- node[lab, pos=0.25, left]{edits} (m.west);
+\draw[arr] (m) -- node[lab, above]{paper.tex} (ren);
+\draw[arr] (ren) -- (comp);
+\draw[arr] (comp) -- node[lab, right]{paper.pdf} (chk);
+\draw[arr] (chk) -- node[lab, above]{issues} (win);
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+\item \textbf{Reading} (Prateek): pandoc turns the paper into a JSON tree; \cc{ingest.py} turns that into a \cc{Manuscript}.
+\item \textbf{Checking the manuscript}: \cc{analyze.py} (Krushna) finds what is missing; \cc{images.py} (Prateek) checks every image.
+\item \textbf{Building} (Krushna): \cc{renderer.py} writes IEEE LaTeX, Tectonic compiles it, \cc{measure.py} and \cc{checks.py} check the PDF; \cc{fit.py} resizes figures; \cc{fix.py} embeds fonts.
+\item \textbf{The window} (Om): shows all of it and sends every edit to \cc{project.py}, which calls the right module.
+\end{itemize}
+
+\section{Who owns what}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{>{\bfseries}l X r}
+\toprule
+Member & Files & Lines\\
+\midrule
+Prateek & \cc{ingest} \cc{frontmatter} \cc{pandoc} \cc{texsource} \cc{manuscript} \cc{images} & \linesPrateek\\
+Krushna & \cc{analyze} \cc{renderer} \cc{compile} \cc{figures} \cc{measure} \cc{checks} \cc{fit} \cc{fix} \cc{models} & \linesKrushna\\
+Om & \cc{project} \cc{main} \cc{process} \cc{ui/window} \cc{ui/editors} \cc{ui/outline} \cc{ui/panels} \cc{ui/preview} \cc{ui/style} & \linesOm\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Follow one click: opening a paper}
+
+\begin{center}
+\begin{tikzpicture}[node distance=4mm, every node/.style={font=\small}]
+\node[mod] (a) {MainWindow.open\_file};
+\node[mod, below=of a] (b) {MainWindow.run \quad\footnotesize(background thread)};
+\node[mod, below=of b] (c) {Project.open};
+\node[mod, below=of c] (d) {ingest.open\_paper};
+\node[mod, below=of d] (e) {pandoc.read \textrightarrow{} \_flatten \textrightarrow{} \_front\_matter \textrightarrow{} \_body \textrightarrow{} \_to\_markdown};
+\node[mod, below=of e] (f) {Manuscript saved to manuscript.json};
+\node[mod, below=of f] (g) {MainWindow.opened \quad\footnotesize(main thread)};
+\node[mod, below=of g] (h) {refresh: Project.findings \textrightarrow{} Outline.show, Panels.show\_findings};
+\node[mod, below=of h] (i) {schedule\_build(0) \textrightarrow{} build \textrightarrow{} Project.build};
+\foreach \x/\y in {a/b,b/c,c/d,d/e,e/f,f/g,g/h,h/i} \draw[arr] (\x) -- (\y);
+\end{tikzpicture}
+\end{center}
+
+\section{Follow one click: Build}
+
+\begin{center}
+\begin{tikzpicture}[node distance=4mm, every node/.style={font=\small}]
+\node[mod] (a) {Project.build};
+\node[mod, below=of a] (b) {renderer.render(m) \textrightarrow{} paper.tex};
+\node[mod, below=of b] (c) {figures.instrument: wrap each graphic in a marker link};
+\node[mod, below=of c] (d) {compile.compile\_pdf: Tectonic};
+\node[mod, below=of d] (e) {measure.measure: where each figure landed, its text size};
+\node[mod, below=of e] (f) {\_strip\_marks: remove the markers \textrightarrow{} paper.pdf};
+\node[mod, below=of f] (g) {checks.run\_all\_checks + \_small\_text \textrightarrow{} issues};
+\node[mod, below=of g] (h) {MainWindow.built: PdfPreview.load, Panels.show\_checks};
+\foreach \x/\y in {a/b,b/c,c/d,d/e,e/f,f/g,g/h} \draw[arr] (\x) -- (\y);
+\end{tikzpicture}
+\end{center}
+
+\chapter{The Python you need for this code}
+
+Sir may stop at any line and ask what a Python feature means. These are all the features the code uses;
+each chip in this book is one of them.
+
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.2\linewidth} >{\raggedright\arraybackslash}p{0.44\linewidth} >{\raggedright\arraybackslash}p{0.28\linewidth}}
+\toprule
+\textbf{Feature} & \textbf{In one sentence} & \textbf{Where to point}\\
+\midrule\endhead
+class, \cc{\_\_init\_\_}, \cc{self} & A class is a blueprint; \cc{\_\_init\_\_} runs when an object is made; \cc{self} is that object. & \cc{models.Issue}, \cc{Project}\\
+inheritance, \cc{super()} & A class built on another reuses its code; \cc{super().\_\_init\_\_} runs the parent's setup. & \cc{Editor} and its subclasses\\
+overriding & A subclass's method with the same name replaces the parent's. & \cc{Editor.save}\\
+\cc{@dataclass} & Writes \cc{\_\_init\_\_}, \cc{\_\_repr\_\_} and \cc{\_\_eq\_\_} from a list of fields. & \cc{Block}, \cc{Finding}\\
+\cc{field(default\_factory=list)} & Gives each object its own new list instead of one shared list. & \cc{Block.images}\\
+\cc{@classmethod} & Receives the class, not an object; used for "make one from a file". & \cc{Project.open}, \cc{Rules.load}\\
+\cc{@staticmethod} & A plain function kept inside a class; no \cc{self}. & \cc{Project.folder\_for}\\
+\cc{@property} & A method read like a field, without brackets. & \cc{Measured.width}\\
+\cc{\_\_eq\_\_} & Defines what \cc{==} means for your objects. & \cc{Author.\_\_eq\_\_}\\
+exceptions & \cc{raise} signals an error; \cc{try}/\cc{except} handles it; \cc{finally} always runs. & \cc{fit.\_compile}\\
+custom exception & \cc{class X(Exception): pass} gives an error its own name. & \cc{PandocNotFound}\\
+\cc{with} & Opens something and guarantees it is closed afterwards. & \cc{checks.run\_all\_checks}\\
+comprehension & \cc{[x for x in items if test]} builds a list in one line. & \cc{Manuscript.figures}\\
+generator + \cc{next} & \cc{next((b for b in blocks if \dots), None)}: first match or None. & \cc{Manuscript.find}\\
+\cc{lambda} & A one-line function without a name. & \cc{MainWindow.open\_file}\\
+nested function & A function inside another; it can see the outer variables. & \cc{pandoc.stringify}\\
+recursion & A function that calls itself on smaller parts. & \cc{ingest.\_flatten}\\
+\cc{*args}, \cc{**kwargs} & Collect extra positional / keyword arguments; also unpack them in a call. & \cc{analyze.analyze}, \cc{Block(**b)}\\
+tuple unpacking & \cc{a, b = pair}; \cc{\_} for values you do not need. & \cc{pandoc.table\_rows}\\
+f-string & \cc{f"Fig. \{n\}"} puts values into text. & everywhere\\
+regex (\cc{re}) & Patterns for text: \cc{match}, \cc{search}, \cc{findall}, \cc{sub}, groups. & \cc{ingest} patterns\\
+\cc{global} & Lets a function assign a module-level variable. & \cc{images.ai\_score}\\
+sets & No duplicates; \cc{\&} intersection, \cc{-} difference. & \cc{analyze} (cited keys)\\
+dict \cc{.get}, \cc{.setdefault} & Read with a default; create a key the first time. & \cc{checks.fonts}\\
+\cc{pathlib.Path} & File paths as objects: \cc{/} joins, \cc{.suffix}, \cc{.exists()}. & everywhere\\
+\cc{subprocess} & Runs another program and reads its output. & \cc{process.run\_tool}\\
+threads, Future & Run slow work in the background; a Future is a result that comes later. & \cc{MainWindow.run}\\
+Tk event loop & \cc{mainloop} waits for clicks and timers; \cc{after} schedules a call. & \cc{ui/window.main}\\
+JSON & Text format for dicts and lists; \cc{json.loads} / \cc{json.dumps}. & \cc{Manuscript.save}\\
+\bottomrule
+\end{longtable}
+
+\begin{trap}[Three traps sir likes]
+\textbf{Mutable default arguments.} \cc{def f(seen=set())} creates the set once and shares it between calls.
+\cc{texsource.full\_source} uses \cc{seen=None} and makes a new set inside.\par
+\textbf{Tkinter and threads.} Only the main thread may touch widgets. The background thread in \cc{MainWindow.run}
+only computes; \cc{root.after} brings the result back.\par
+\textbf{\cc{==} on objects.} Without \cc{\_\_eq\_\_}, two equal-looking objects are not \cc{==}; \cc{Author} defines it.
+\end{trap}

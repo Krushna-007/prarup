@@ -1,0 +1,180 @@
+% Prarup viva book. Built by viva/build.py; do not compile this file directly.
+\documentclass[10.5pt,openany]{book}
+\usepackage[a4paper, top=20mm, bottom=22mm, inner=20mm, outer=18mm,
+            headsep=7mm, footskip=11mm]{geometry}
+
+\usepackage{fontspec}
+\setmainfont{texgyrepagella}[Extension=.otf, UprightFont=*-regular,
+  BoldFont=*-bold, ItalicFont=*-italic, BoldItalicFont=*-bolditalic]
+\setsansfont{texgyreheros}[Extension=.otf, UprightFont=*-regular,
+  BoldFont=*-bold, ItalicFont=*-italic, BoldItalicFont=*-bolditalic, Scale=0.92]
+\setmonofont{Inconsolatazi4}[Extension=.otf, UprightFont=*-Regular,
+  BoldFont=*-Bold, ItalicFont=*-Regular, ItalicFeatures={FakeSlant=0.15},
+  BoldItalicFont=*-Bold, BoldItalicFeatures={FakeSlant=0.15}, Scale=0.9]
+\newfontfamily\dvs{DejaVuSans.ttf}[Scale=0.85]
+\newfontfamily\deva{Kohinoor Devanagari}[Script=Devanagari, Scale=0.9]
+\newcommand{\noentry}{\tikz[baseline=-0.6ex]{\fill[brick] (0,0) circle (0.9ex);
+  \fill[white] (-0.55ex,-0.15ex) rectangle (0.55ex,0.15ex);}}
+
+\usepackage{xcolor}
+\definecolor{ink}{RGB}{34,40,49}
+\definecolor{slate}{RGB}{38,70,104}
+\definecolor{ochre}{RGB}{168,118,34}
+\definecolor{brick}{RGB}{148,54,42}
+\definecolor{sage}{RGB}{64,108,86}
+\definecolor{plum}{RGB}{96,66,112}
+\definecolor{paper}{RGB}{249,248,244}
+\definecolor{outbg}{RGB}{242,244,246}
+\definecolor{rulegray}{RGB}{205,205,200}
+\definecolor{kw}{RGB}{38,70,140}
+\definecolor{strc}{RGB}{150,70,30}
+\definecolor{cmt}{RGB}{110,120,110}
+\AtBeginDocument{\color{ink}}
+
+\usepackage{listings}
+\usepackage[most]{tcolorbox}
+\tcbuselibrary{listings}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{multicol}
+\usepackage{fancyhdr}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, backgrounds, calc, chains}
+\usepackage{titlesec}
+\usepackage{setspace}
+\usepackage{microtype}
+\usepackage[colorlinks=true, linkcolor=slate, urlcolor=sage, linktoc=all]{hyperref}
+\setstretch{1.05}
+\emergencystretch=3em
+\raggedbottom
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.45em}
+\setlist{itemsep=0.1em, topsep=0.25em, parsep=0pt, partopsep=0pt}
+
+\titleformat{\chapter}[display]{\normalfont\color{slate}}
+  {\fontsize{30}{30}\selectfont\color{ochre}\thechapter}{0.1em}{\LARGE\raggedright}
+  [\vspace{1pt}{\color{rulegray}\titlerule[0.6pt]}]
+\titlespacing*{\chapter}{0pt}{-14pt}{14pt}
+\titleformat{\section}{\Large\color{slate}}{\color{ochre}\thesection}{0.6em}{}
+\titleformat{\subsection}{\large\itshape\color{slate}}{\thesubsection}{0.5em}{}
+\titleformat{\part}[display]{\centering\normalfont\color{slate}}
+  {\large\scshape\color{ochre} Part \thepart}{10pt}{\Huge}
+
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.3pt}
+\renewcommand{\headrule}{{\color{rulegray}\hrule width\headwidth height\headrulewidth}}
+\fancyhead[L]{\small\color{slate}\leftmark}
+\fancyfoot[R]{\small\thepage}
+\fancyfoot[L]{\small\color{gray}Prarup viva \textperiodcentered{} %%TITLE%%}
+\renewcommand{\chaptermark}[1]{\markboth{\thechapter.\ #1}{}}
+\fancypagestyle{plain}{\fancyhf{}\renewcommand{\headrulewidth}{0pt}\fancyfoot[C]{\small\thepage}}
+
+% ---------------- code -------------------------------------------------
+\lstdefinestyle{py}{language=Python, basicstyle=\ttfamily\small,
+  keywordstyle=\color{kw}\bfseries, stringstyle=\color{strc},
+  commentstyle=\color{cmt}\itshape, showstringspaces=false,
+  morekeywords={True,False,None,nonlocal,self,as,with,yield,lambda},
+  numbers=left, numberstyle=\tiny\color{gray!80}, numbersep=6pt,
+  breaklines=true, tabsize=4, columns=fullflexible, keepspaces=true,
+  upquote=true, escapeinside={(*@}{@*)},
+  postbreak=\mbox{\textcolor{gray}{$\hookrightarrow$}\space}}
+\lstset{style=py}
+\newtcblisting{codebox}[1][]{enhanced, listing only, breakable,
+  colback=paper, colframe=rulegray, boxrule=0.4pt, arc=1pt,
+  left=14pt, right=4pt, top=0pt, bottom=0pt,
+  listing options={style=py,#1}, before skip=4pt, after skip=4pt}
+\newtcblisting{tracebox}{enhanced, listing only, breakable,
+  colback=sage!4, colframe=sage!40, boxrule=0.4pt, arc=1pt,
+  left=6pt, right=4pt, top=1pt, bottom=1pt,
+  listing options={basicstyle=\ttfamily\small, numbers=none, columns=fullflexible,
+    keepspaces=true, breaklines=true, upquote=true, showstringspaces=false, language={},
+    escapeinside={(*@}{@*)}},
+  before skip=4pt, after skip=6pt,
+  overlay={\node[anchor=north east, font=\tiny\sffamily\color{sage}, inner sep=2pt]
+    at (frame.north east) {TRACE};}}
+\newcommand{\cc}[1]{\leavevmode{\ttfamily\color{slate!90!black}#1}}
+
+% ---------------- one piece of code --------------------------------------
+\newcommand{\unithead}[3]{\par\addvspace{10pt}%
+  \noindent{\color{rulegray}\rule{\linewidth}{0.4pt}}\par\nopagebreak\vspace{-2pt}%
+  \noindent{\large\bfseries\ttfamily\color{slate}#1}\hfill
+  {\small\sffamily\color{ochre}#2 \textperiodcentered{} #3}\par\nopagebreak}
+\newcommand{\chips}[1]{\noindent{\footnotesize #1}\par\nopagebreak\vspace{-2pt}}
+\newcommand{\chip}[1]{\tikz[baseline=(c.base)]\node[inner sep=1.4pt, rounded corners=2pt,
+  fill=plum!10, text=plum, font=\scriptsize\sffamily] (c) {#1};\,}
+\newcommand{\designnote}[1]{\par\smallskip\noindent\colorbox{plum!8}{\parbox{\dimexpr\linewidth-2\fboxsep}{\small
+  \textcolor{plum}{\sffamily\bfseries Design:}\ #1}}\par\smallskip}
+\newcommand{\calledby}[1]{\par\noindent{\small\sffamily\color{sage}\textbf{Called by:} #1}\par}
+\newtcolorbox{askbox}{enhanced, breakable, colback=ochre!4, colframe=ochre!45, boxrule=0.4pt,
+  arc=1pt, left=6pt, right=6pt, top=2pt, bottom=2pt, before skip=5pt, after skip=4pt,
+  title={If sir points here}, fonttitle=\footnotesize\sffamily\bfseries,
+  coltitle=ochre!45!black, colbacktitle=ochre!22}
+\newcommand{\qa}[2]{\par\noindent{\color{ink}\textbf{Q.}\ #1}\par\noindent{\color{ink}\textcolor{slate}{\textbf{A.}}\ #2}\par\smallskip}
+
+% ---------------- one file ---------------------------------------------------
+\newtcolorbox{purposebox}{enhanced, colback=slate!4, colframe=slate!40, boxrule=0.4pt, arc=1pt,
+  title={What this file is for}, fonttitle=\small\sffamily\bfseries, coltitle=slate!90!black,
+  colbacktitle=slate!16}
+\newcommand{\modstats}[1]{\noindent{\small\sffamily\color{gray}#1}\par}
+\newtcolorbox{importbox}{enhanced, blanker, borderline west={1.6pt}{0pt}{plum!60},
+  left=10pt, before skip=6pt, after skip=6pt,
+  before upper={\noindent{\small\sffamily\bfseries\color{plum}Imports: what comes in}\par\smallskip}}
+\newcommand{\importrow}[2]{\noindent\hspace*{0.5em}\textbf{\small#1}\enspace{\small\ttfamily\color{gray!80!black}#2}\par}
+\newcommand{\importedby}[1]{\smallskip\noindent{\small\sffamily\bfseries\color{plum}Used by:}\ {\small#1}\par}
+
+% ---------------- other boxes ----------------------------------------------
+\newtcolorbox{keyidea}[1][Key idea]{enhanced, breakable, blanker,
+  borderline west={1.6pt}{0pt}{slate!70}, left=11pt, top=3pt, bottom=3pt,
+  before upper={\noindent{\small\sffamily\bfseries\color{slate}#1}\par\smallskip}}
+\newtcolorbox{trap}[1][Trap]{enhanced, breakable, colback=brick!3, colframe=brick!45,
+  boxrule=0.4pt, arc=1pt, title={#1}, fonttitle=\small\sffamily\bfseries,
+  coltitle=brick!85!black, colbacktitle=brick!14, left=8pt, right=8pt}
+\newtcolorbox{cheat}[1]{enhanced, colback=white, colframe=slate!60,
+  boxrule=0.5pt, arc=1pt, title={#1}, fonttitle=\sffamily\bfseries, coltitle=slate!90!black,
+  colbacktitle=slate!16, left=6pt, right=6pt, top=3pt, bottom=3pt,
+  before upper={\lineskiplimit=-\maxdimen}}
+\tikzset{box/.style={draw=slate!70, fill=slate!5, rounded corners=2pt, align=center,
+    font=\small\sffamily, inner sep=4pt},
+  mod/.style={draw=plum!70, fill=plum!6, rounded corners=2pt, align=center,
+    font=\small\ttfamily, inner sep=3pt},
+  arr/.style={-{Stealth[length=2mm]}, slate!80, thick},
+  lab/.style={font=\scriptsize\sffamily, text=ochre!80!black, fill=white, inner sep=1pt}}
+
+\input{%%OUT%%/numbers.tex}
+
+\begin{document}
+\frontmatter
+\begin{titlepage}
+\centering\vspace*{30mm}
+{\fontsize{44}{44}\selectfont\color{slate}{\deva प्रारूप}\par}
+\vspace{4mm}
+{\Huge\color{slate}Prarup, line by line\par}
+\vspace{6mm}
+{\Large\color{ochre}%%TITLE%%\par}
+\vspace{14mm}
+{\large Every function, class and method, with its real code,\\
+what it does, who calls it, and what sir will ask.\par}
+\vfill
+{\small Prateek Kalal \textperiodcentered{} Om Patel \textperiodcentered{} Krushna Parmar\\
+PC503 \textperiodcentered{} DA-IICT\par}
+\vspace{6mm}
+{\footnotesize\color{gray}Generated from the code by \texttt{viva/build.py}. If the code changes, run it again:
+the line numbers and code here are always the ones in the repository.\par}
+\end{titlepage}
+
+\tableofcontents
+\mainmatter
+\input{%%VIVA%%/parts/common.tex}
+\input{%%VIVA%%/parts/design.tex}
+%%BODY%%
+\chapter{The question bank}
+\color{ink}
+Every question from the boxes in this book, in one place, with a link back to the code it is about.
+Cover the answer, read the question, answer aloud, then check.
+%%BANK%%
+\color{ink}\input{%%VIVA%%/parts/rapid.tex}
+\end{document}

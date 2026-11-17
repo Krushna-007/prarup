@@ -1,0 +1,107 @@
+@purpose
+Checks the **compiled PDF** against the conference rules, the way IEEE PDF eXpress would. Each problem is an `Issue`:
+- FONT-01: a font is not embedded (Fix PDF can embed it); FONT-02: a Type3 bitmap font (re-export the figure);
+- GEOM-01: over the page limit; GEOM-02: a figure runs past its column;
+- DOC-01: the PDF is encrypted; DOC-02: it has bookmarks.
+The checks are methods of one class, `PdfChecks`, which holds the open document and the rules. Small functions at the bottom open a PDF and run one check or all of them.
+
+This file never runs programs or touches the network: a test (`test_layering`) makes sure of that, so the checks stay fast and safe.
+
+@imports
+`re`, `Path`, `pymupdf` (reads PDF fonts, pages, images, metadata) and `Geometry`, `Issue`, `Rules`.
+
+== UnreadablePdf
+Raised when a file is missing or is not a PDF, with a readable message instead of PyMuPDF's.
+
+== _open
+Opens a PDF with PyMuPDF. `filetype="pdf"` forces PDF mode. PyMuPDF's own errors are turned into `UnreadablePdf`; `raise ... from exc` keeps the original error attached for debugging.
+? What does `raise X from exc` do?
+! Raises the new error and records the original as its cause, so the traceback shows both.
+
+== plain_font_name
+Embedded font names often start with a random 6-letter subset tag: "ABCDEF+Helvetica". This removes the tag so the message says "Helvetica". `partition("+")` splits at the first plus into three parts.
+> plain_font_name("QWERTY+Times-Roman")  ->  "Times-Roman"
+? What does str.partition return?
+! A tuple: the part before the separator, the separator (or "" if absent), and the part after.
+
+== describe_pages
+Turns a list of page numbers into short text: [1, 2, 3, 5] becomes "pages 1-3, 5". It walks the sorted pages, extending a run while pages are consecutive and starting a new run when there is a gap.
+? Why group pages into runs?
+! A font missing on every page would otherwise produce a message listing every page number.
+
+== read_geometry
+Reads the page geometry that our template wrote into the PDF's information dictionary under `PrarupGeometry`: four numbers ending in "pt" (column width, text width, left margin, column gap). Returns a `Geometry`, or None for a PDF Prarup did not make.
+- `xref_get_key(-1, "Info")` reads the PDF trailer's Info entry, which points to the information dictionary object.
+- `(?=pt)` is a lookahead: take numbers followed by "pt".
+? Why ask LaTeX for the geometry instead of hard-coding IEEE's numbers?
+! The real values depend on the class and packages; reading what LaTeX actually used is always right.
+
+== PdfChecks
+Holds an open PDF and the rules; each method is one check that returns a list of Issues.
+* Single Responsibility: the class only inspects a PDF. A test (`test_layering`) fails if it ever imports subprocess, tkinter or network modules.
+? Why a class here and not separate functions?
+! All checks need the same two things (document and rules); storing them on `self` once avoids passing them to every function.
+
+== PdfChecks.__init__
+Stores the document and the rules.
+
+== PdfChecks.run
+Runs every check and returns all issues, errors first. `for check in (self.fonts, ...)` loops over **bound methods**: each is called with `check()`. `sorted(..., key=lambda issue: issue.severity != "error")` sorts by False (errors) before True (warnings).
+* Open/Closed (mostly): a new check is a new method plus its name in this tuple; existing checks are not touched.
+? How does the sort put errors first?
+! The key is `severity != "error"`: False for errors, True for others, and False sorts before True.
+? What is a bound method?
+! `self.fonts` is the method already tied to this object, so calling `check()` is the same as `self.fonts()`.
+
+== PdfChecks.fonts
+For every page, lists its fonts with `get_fonts(full=True)`. A Type3 font is FONT-02 (bitmap font, cannot be fixed automatically); a font whose file is "n/a" is not embedded, FONT-01 (Ghostscript can embed it). Fonts are grouped by name, so a font missing on many pages is one issue.
+- `found.setdefault(key, []).append(number)` creates an empty list the first time a key is seen, then appends the page.
+? Why is a non-embedded font a problem?
+! IEEE requires every font embedded so the paper prints the same everywhere. matplotlib often leaves Helvetica unembedded, and IEEE PDF eXpress rejects the paper.
+? Why test Type3 before "n/a"?
+! Type3 fonts also report "n/a", but embedding cannot fix them; they must be caught first.
+? What does setdefault(...).append do in one line?
+! Gets the list for the key, creating an empty one if needed, and appends to it.
+
+== PdfChecks.page_count
+GEOM-01 if the PDF has more pages than the limit, saying how many over.
+? Why is GEOM-01 a warning and not an error?
+! Some conferences allow extra pages for a fee; the author decides.
+
+== PdfChecks.security
+DOC-01 if the PDF is encrypted. IEEE rejects encrypted PDFs; Ghostscript can rewrite it without encryption.
+? Where does the encryption information come from?
+! `document.metadata["encryption"]`, which PyMuPDF fills in; None means not encrypted.
+
+== PdfChecks.bookmarks
+DOC-02 if the PDF has bookmarks (a table of contents in the side panel), which IEEE asks authors to leave out.
+? What makes bookmarks appear?
+! The `hyperref` package adds them by default.
+
+== PdfChecks.figure_overflow
+GEOM-02 for any image that runs more than 2 pt past its column. For each image rectangle on each page, it works out if the image is centred on the page and no wider than the text (a two-column figure), asks `Geometry.bounds` for the allowed edges, and measures how far it goes beyond them.
+? How does it tell a two-column figure from a one-column one?
+! A two-column figure is centred on the page (its centre within 2 pt of the text's centre) and fits the text width.
+
+== check_fonts
+Opens the PDF with `with` and runs only the font check. `with` closes the PDF afterwards.
+* Interface Segregation: callers that need one check use a one-check function instead of depending on the whole class.
+? Why do these small functions exist?
+! Tests and other code can run one check from a path in one line, without creating PdfChecks themselves.
+
+== check_page_count
+Opens the PDF and runs only the page-count check with the given rules.
+
+== check_security
+Opens the PDF and runs only the encryption check.
+
+== check_bookmarks
+Opens the PDF and runs only the bookmarks check.
+
+== check_figure_overflow
+Opens the PDF and runs only the overflow check.
+
+== run_all_checks
+Opens the PDF and runs every check. This is what `Project.build` and Fix PDF call.
+? What does `with _open(pdf_path) as doc` guarantee?
+! The PDF is closed when the block ends, even if a check raises an error.

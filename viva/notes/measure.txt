@@ -1,0 +1,52 @@
+@purpose
+**Measures each figure on the compiled PDF**: where it landed, whether it runs past its column, and how big its text printed. The text size is found two ways:
+- **vector figures** (PDF plots): read the font size of the words drawn inside the figure's box, straight from the PDF;
+- **bitmap figures** (PNG, JPG): run **Tesseract OCR** on the image file to find word heights in pixels, then convert to points using the printed width.
+
+OCR gives the height of a word's box. A word with tall letters and tails ("plotting") is about 0.96 of the font size tall; one without tails is about 0.76. These numbers were calibrated on test plots. `TALL` and `TAIL` are the letters that reach up or down. `TOLERANCE` (2 pt) ignores tiny overflows from rounding.
+
+@imports
+`csv` and `io` (Tesseract prints a tab-separated table), `re`, `statistics` (median), `Path`, `pymupdf` (read the PDF), `read_geometry` from checks, the `Graphic` and `Measured` classes, and `find_tool` / `run_tool`.
+
+== graphic_boxes
+Finds every `prarup:fig:N` link on every page and returns `{N: (page_number, rectangle)}`.
+? What is link["from"]?
+! The rectangle on the page that the link covers, which is exactly where the graphic was drawn.
+
+== small_text
+Returns the typical size of the **smaller** text: the median of the smaller half of the sizes. Axis labels and tick numbers are what readers struggle with, not a big title.
+> sizes [4, 5, 5, 9, 12]  ->  smaller half [4, 5]  ->  median 4.5
+? Why the smaller half and not all the text?
+! A large title would raise the average and hide unreadable tick labels.
+? Why the median and not the mean?
+! One odd value (a misread word) moves the mean a lot but the median hardly at all.
+
+== vector_text
+Reads every text span on the page, keeps those whose centre lies inside the figure's rectangle, and returns `small_text` of their font sizes.
+? Why test the centre of the span and not the whole span?
+! Labels often stick out slightly past the image edge; the centre test still counts them.
+
+== ocr_text_per_width
+A cache in front of `_ocr_text_per_width`: OCR is slow, and the same image is measured on every build. The cache key is the file path plus its modification time, so a replaced image is measured again.
+? Why include the modification time in the key?
+! If the user replaces the image file, the time changes, the key changes, and the new image is measured instead of using an old result.
+
+== _ocr_text_per_width
+Runs Tesseract on the image (`--psm 11` finds scattered text, as in plots; `tsv` gives a table of words with boxes and confidence). Only real words are kept: word level, at least 2 characters, confidence of at least 80, letters and digits only. Each word's pixel height is divided by 0.96 or 0.76 to estimate the font size in pixels. With at least 3 words, `small_text` of those sizes divided by the image width in pixels gives "text size per pixel of width"; printed text size = this ratio times printed width.
+? Why divide by the image width?
+! The figure will be printed at some width. The ratio says how big the text is for each point of width, so the printed size is ratio times printed width.
+? Why ignore words with confidence below 80?
+! Low-confidence words are often misread lines or ticks; their heights would be wrong.
+
+== find_file
+Finds the image file for a LaTeX path that may have no extension, trying each in `EXTENSIONS`.
+? Why try "" first?
+! The path may already include its extension.
+
+== measure
+For each graphic found in the PDF: creates a `Measured` with its page and box; computes how far it runs past its allowed column edges (using `Geometry.bounds`, minus the tolerance); and measures its text size by OCR (bitmaps) or from the PDF (vector). Returns the geometry and the list of measurements.
+> Fig. 4: page 3, box 54..306, column right edge 306  ->  overflow 0, text 3.9 pt
+? How is overflow calculated?
+! The larger of: how far the right edge is past the column's right edge, and how far the left edge is before the column's left edge, minus 2 pt tolerance; never below 0.
+? Why open the PDF and close it explicitly?
+! The file stays locked on Windows while open; `doc.close()` releases it.
