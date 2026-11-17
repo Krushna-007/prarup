@@ -47,8 +47,17 @@ identifies the item to review in the manuscript outline.
 | Code | Finding | Severity |
 |---|---|---|
 | IMG-01 | Printed resolution under 300 dpi (pixels ÷ printed inches) | Warning |
+| IMG-02 | Declared AI-generated: a signed C2PA manifest, or IPTC `trainedAlgorithmicMedia` | Error |
+| IMG-03 | AI generator traces: Stable Diffusion settings, a ComfyUI workflow, a generator's name | Warning |
+| IMG-04 | The optional classifier rates a photo at least 80% likely AI | Warning |
 | IMG-05 | The same image as another figure (difference hash, survives resizing) | Warning |
 | IMG-06 | The image cannot be read | Warning |
+
+AI evidence is reported as evidence, never as a verdict. The classifier
+(`pip install -r requirements-ai.txt`, tick **AI classifier**) is not run on
+charts and diagrams: on 26 real figures it flagged 4 charts at 0.85 to 1.00.
+A chart is an image whose 8 most common colours cover 90% of its pixels.
+Finding nothing proves nothing, because Word and screenshots strip metadata.
 
 ---
 
