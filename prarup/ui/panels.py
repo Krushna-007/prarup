@@ -1,6 +1,3 @@
-"""The tabs under the editor: Missing, Images, PDF checks, Figure fit, Notes.
-Clicking a row that belongs to a block opens that block."""
-
 from pathlib import Path
 from tkinter import ttk
 
@@ -8,7 +5,6 @@ from prarup.ui.style import ERROR, WARNING, text_box
 
 
 class ProblemList(ttk.Frame):
-    """A list of rows; each row may remember the block it belongs to."""
 
     def __init__(self, parent, columns, widths, on_jump):
         super().__init__(parent)
@@ -24,10 +20,9 @@ class ProblemList(ttk.Frame):
         scroll.pack(side="right", fill="y")
         self.tree.pack(fill="both", expand=True)
         self.tree.bind("<<TreeviewSelect>>", self._clicked)
-        self.blocks = {}                   # row id -> block id
+        self.blocks = {}
 
     def fill(self, rows):
-        """rows: (values, severity, block_id)"""
         self.tree.delete(*self.tree.get_children())
         self.blocks = {}
         for values, severity, block_id in rows:

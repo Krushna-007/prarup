@@ -1,7 +1,3 @@
-"""One editor for each kind of block. Every editor has save(), which writes
-what was typed through the Project and returns a message ("" if nothing
-changed). Buttons call the window, which then redraws everything."""
-
 from pathlib import Path
 from tkinter import filedialog, ttk
 
@@ -15,7 +11,6 @@ IMAGE_TYPES = [("Images", "*.png *.jpg *.jpeg *.pdf")]
 
 
 class Editor(ttk.Frame):
-    """Heading, the problems for this block, then the subclass's fields."""
 
     def __init__(self, parent, window, key, heading, problems):
         super().__init__(parent, padding=12)
@@ -31,7 +26,6 @@ class Editor(ttk.Frame):
                   wraplength=560).pack(anchor="w", pady=(6, 2))
 
     def block_buttons(self):
-        """Save, move, insert and delete: the same row under every block editor."""
         row = ttk.Frame(self)
         row.pack(fill="x", pady=(10, 0))
         w = self.window
@@ -47,7 +41,6 @@ class Editor(ttk.Frame):
 
 
 class FrontEditor(Editor):
-    """Title, authors (one per line: Name | Affiliation), abstract, keywords."""
 
     def __init__(self, parent, window, key, problems):
         super().__init__(parent, window, key, "Title, authors, abstract", problems)
@@ -86,7 +79,6 @@ class FrontEditor(Editor):
 
 
 class TextEditor(Editor):
-    """Paragraphs, headings, quotes, lists, equations: one text field."""
 
     NAMES = {"para": "Paragraph", "heading": "Heading", "quote": "Quote", "list": "List",
              "equation": "Equation (LaTeX, without $ signs)", "code": "Code", "raw": "Raw LaTeX"}
@@ -123,12 +115,11 @@ class TextEditor(Editor):
 
 
 class FigureEditor(Editor):
-    """Image cards (pixels, printed dpi, AI evidence) and the caption."""
 
     def __init__(self, parent, window, block, problems, number, reports):
         super().__init__(parent, window, block.id, f"Figure {number}", problems)
         self.block = block
-        self.pictures = []                 # Tk forgets images nobody keeps a reference to
+        self.pictures = []
         if block.detected:
             self.label(f"Detected: {block.detected}", hint=True)
         cards = ttk.Frame(self)
@@ -198,7 +189,6 @@ class FigureEditor(Editor):
 
 
 class TableEditor(Editor):
-    """Caption and every cell, as a grid of fields."""
 
     def __init__(self, parent, window, block, problems, number):
         super().__init__(parent, window, block.id, f"Table {number}", problems)
@@ -206,7 +196,7 @@ class TableEditor(Editor):
         self.label("Caption (IEEE puts it above the table)")
         self.caption = entry(self, block.caption)
         self.caption.pack(fill="x")
-        self.cells = []                    # (pandoc cell, entry field)
+        self.cells = []
         grid = ttk.Frame(self)
         grid.pack(anchor="w", pady=(8, 0))
         rows = pandoc.table_rows(block.node[0])[0] if block.node else []
@@ -237,7 +227,6 @@ class TableEditor(Editor):
 
 
 class ReferencesEditor(Editor):
-    """One reference per line. A .bib file is shown but edited in the .bib itself."""
 
     def __init__(self, parent, window, block, problems):
         super().__init__(parent, window, block.id, f"References ({len(block.entries)})", problems)
@@ -264,7 +253,6 @@ class ReferencesEditor(Editor):
 
 
 def editor_for(parent, window, key, findings, reports):
-    """The right editor for an outline row."""
     m = window.project.m
     if key in ("title", "authors", "abstract", "keywords"):
         return FrontEditor(parent, window, key, [f for f in findings if f.code.startswith("META")])

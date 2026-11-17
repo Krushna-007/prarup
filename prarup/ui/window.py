@@ -1,15 +1,3 @@
-"""The main window.
-
-    toolbar:  Open · Build · Fit figures · Fix PDF · AI classifier · Export
-    left:     the outline (every block, tagged)
-    middle:   the editor for the chosen block, and the tabs under it
-    right:    the PDF
-
-Slow jobs (open, build, fit, fix, export) run on one background thread so the
-window never freezes. Tkinter is not thread-safe, so the thread only computes;
-the window polls for the result with root.after() and draws it itself.
-"""
-
 import sys
 import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
@@ -40,9 +28,9 @@ class MainWindow:
         self.worker = ThreadPoolExecutor(max_workers=1)
         self.busy = False
         self.rebuild_timer = None
-        self.rebuild_waiting = False      # an edit came in while a build was running
+        self.rebuild_waiting = False
         self.findings, self.key, self.editor = [], None, None
-        self.choose_fit = self.ask_fit    # tests replace this to skip the dialog
+        self.choose_fit = self.ask_fit
         self.classify = tk.BooleanVar(root, value=False)
         self.status = tk.StringVar(root, value="Open a Word (.docx), LaTeX (.tex) or zipped LaTeX paper.")
 
@@ -72,7 +60,6 @@ class MainWindow:
         self.enable()
 
     def place_dividers(self):
-        """Give the editor about 60% of the middle column, the tabs the rest."""
         self.root.update_idletasks()
         self.middle.sashpos(0, int(self.middle.winfo_height() * 0.6))
 
@@ -95,8 +82,6 @@ class MainWindow:
         self.file_label = ttk.Label(bar, text="", style="File.TLabel")
         self.file_label.pack(side="right")
 
-    # ---- background jobs ---------------------------------------------------
-
     def enable(self):
         for name, button in self.buttons.items():
             ready = not self.busy and (name == "Open" or self.project is not None)
@@ -105,7 +90,6 @@ class MainWindow:
             button.configure(state="normal" if ready else "disabled")
 
     def run(self, message, job, done):
-        """Run job() on the background thread, then done(result) on the window."""
         if self.busy:
             return
         self.busy = True
@@ -137,8 +121,6 @@ class MainWindow:
         self.worker.shutdown()
         self.root.destroy()
 
-    # ---- opening and showing -----------------------------------------------
-
     def choose_file(self):
         path = filedialog.askopenfilename(parent=self.root, filetypes=PAPERS)
         if path:
@@ -161,7 +143,6 @@ class MainWindow:
         self.schedule_build(0)
 
     def refresh(self):
-        """Run the checks on the manuscript, then redraw the outline, tabs and editor."""
         self.findings = self.project.findings(self.classify.get())
         self.outline.show(self.project.m, self.findings)
         self.panels.show_findings(self.findings, self.project.reports, self.project.m.notes)
@@ -172,7 +153,6 @@ class MainWindow:
             self.make_editor(None)
 
     def show_block(self, key):
-        """The outline was clicked."""
         if key == self.key:
             return
         message = self.save_editor(quiet=True)
@@ -190,14 +170,10 @@ class MainWindow:
             self.editor.pack(fill="both", expand=True)
 
     def jump(self, block_id):
-        """A row in a tab was clicked: open its block."""
         self.outline.select(block_id)
         self.show_block(block_id)
 
-    # ---- edits -------------------------------------------------------------
-
     def save_editor(self, quiet=False):
-        """Save what is typed in the editor. Returns the message ("" if nothing changed)."""
         if self.editor is None:
             return ""
         try:
@@ -253,10 +229,7 @@ class MainWindow:
             self.status.set("AI classifier on: it runs on photos, never on charts."
                             if self.classify.get() else "AI classifier off.")
 
-    # ---- build, fit, fix, export -------------------------------------------
-
     def schedule_build(self, delay=REBUILD_AFTER_MS):
-        """Build a moment after the last edit, so typing does not start many builds."""
         if self.rebuild_timer:
             self.root.after_cancel(self.rebuild_timer)
         self.rebuild_timer = self.root.after(delay, self.build)

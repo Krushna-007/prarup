@@ -1,12 +1,3 @@
-"""Checks on every figure image: resolution, duplicates, and AI evidence.
-
-AI evidence comes in three layers, strongest first. It is evidence, never a verdict.
-1. Declared: a signed C2PA manifest, or the IPTC tag "trainedAlgorithmicMedia".
-2. Traces: settings a generator leaves in the file (Stable Diffusion, ComfyUI).
-3. Classifier (optional install): a likelihood, run on photos only, because it
-   gives false alarms on charts.
-"""
-
 import json
 import re
 from dataclasses import dataclass, field
@@ -26,7 +17,7 @@ GENERATORS = ["Midjourney", "DALL-E", "DALL·E", "OpenAI", "Firefly", "Stable Di
               "Imagen", "Gemini", "Google Generative AI", "Leonardo.Ai", "Ideogram", "FLUX",
               "ComfyUI", "InvokeAI", "AUTOMATIC1111", "NovelAI", "Craiyon"]
 CLASSIFIER = "Ateeqq/ai-vs-human-image-detector"
-CHART_SHARE = 0.9            # 8 colours covering 90% of pixels means a chart, not a photo
+CHART_SHARE = 0.9
 
 
 @dataclass
@@ -38,9 +29,9 @@ class ImageReport:
     height_px: int = 0
     printed_inches: float = 0.0
     dpi: float = 0.0
-    declared: str = ""        # layer 1
-    traces: str = ""          # layer 2
-    ai_score: float | None = None   # layer 3
+    declared: str = ""
+    traces: str = ""
+    ai_score: float | None = None
     ai_note: str = ""
     duplicate_of: str = ""
     readable: bool = True
@@ -56,10 +47,7 @@ class ImageReport:
         return "no AI evidence found"
 
 
-# ---- layer 1: declared ----------------------------------------------------
-
 def read_c2pa(path: Path) -> str:
-    """The C2PA manifest's AI action, or "" if there is none."""
     try:
         import c2pa
         store = json.loads(c2pa.Reader(str(path)).json())
@@ -81,7 +69,6 @@ def read_c2pa(path: Path) -> str:
 
 
 def metadata_text(image: Image.Image, raw: bytes) -> str:
-    """All text in the file's metadata: PNG chunks, EXIF and XMP."""
     parts = []
     for key, value in image.info.items():
         if isinstance(value, str):
@@ -93,8 +80,6 @@ def metadata_text(image: Image.Image, raw: bytes) -> str:
         parts.append(packet.decode("utf-8", "ignore"))
     return "\n".join(parts)
 
-
-# ---- layer 2: generator traces ---------------------------------------------
 
 def find_traces(image: Image.Image, metadata: str) -> str:
     settings = image.info.get("parameters")
@@ -109,22 +94,19 @@ def find_traces(image: Image.Image, metadata: str) -> str:
     return ""
 
 
-# ---- layer 3: classifier (optional) ----------------------------------------
-
 _model = None
 
 
 def classifier_installed() -> bool:
     try:
-        import torch  # noqa: F401
-        import transformers  # noqa: F401
+        import torch
+        import transformers
         return True
     except ImportError:
         return False
 
 
 def ai_score(path: Path) -> float | None:
-    """The classifier's probability that the image is AI-generated."""
     global _model
     if not classifier_installed():
         return None
@@ -140,7 +122,6 @@ def ai_score(path: Path) -> float | None:
 
 
 def photo_like(image: Image.Image) -> bool:
-    """False for charts, diagrams and logos: few colours cover most pixels."""
     small = image.convert("RGB")
     small.thumbnail((256, 256))
     counts = {}
@@ -151,10 +132,7 @@ def photo_like(image: Image.Image) -> bool:
     return top / max(1, sum(counts.values())) < CHART_SHARE
 
 
-# ---- duplicates --------------------------------------------------------------
-
 def dhash(image: Image.Image) -> int:
-    """64-bit difference hash: survives resizing and recompression."""
     small = ImageOps.grayscale(image).resize((9, 8), Image.Resampling.LANCZOS)
     pixels = list(small.get_flattened_data())
     bits = 0
@@ -167,8 +145,6 @@ def dhash(image: Image.Image) -> int:
 def same_picture(a: int, b: int) -> bool:
     return bin(a ^ b).count("1") <= 4
 
-
-# ---- one file, then the whole paper ----------------------------------------
 
 def inspect_file(path: Path, classify: bool = False) -> tuple[ImageReport, int | None]:
     report = ImageReport(path=str(path), block_id="", figure=0)

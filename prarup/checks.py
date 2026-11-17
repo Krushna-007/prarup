@@ -52,7 +52,6 @@ def read_geometry(doc: pymupdf.Document) -> Geometry | None:
     return Geometry(*numbers) if len(numbers) == 4 else None
 
 
-
 class PdfChecks:
     def __init__(self, document: pymupdf.Document, rules: Rules):
         self.document = document

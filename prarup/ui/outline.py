@@ -1,6 +1,3 @@
-"""The paper as a tagged list: TITLE, AUTH, ABS, KEY, H1, P, FIG 3, TAB 2, EQ, REF.
-A row with a problem is red and starts with a warning sign."""
-
 import re
 from tkinter import ttk
 
@@ -10,10 +7,9 @@ FRONT = ["title", "authors", "abstract", "keywords"]
 
 
 def plain(markdown: str, limit: int = 70) -> str:
-    """One readable line: Markdown marks removed, maths kept."""
-    text = re.sub(r"\{[#.][^}]*\}", "", markdown)          # pandoc attributes like {#fig:1}
-    text = re.sub(r"\\([^A-Za-z])", r"\1", text)            # escapes like 1\. or \'
-    text = re.sub(r"\*\*|__|`|\^", "", text)                # bold, code, superscript marks
+    text = re.sub(r"\{[#.][^}]*\}", "", markdown)
+    text = re.sub(r"\\([^A-Za-z])", r"\1", text)
+    text = re.sub(r"\*\*|__|`|\^", "", text)
     text = " ".join(text.split())
     return text if len(text) <= limit else text[:limit - 1] + "…"
 
@@ -46,7 +42,6 @@ class Outline(ttk.Frame):
         self.tree.insert("", "end", iid=key, values=(tag, mark + text), tags=(style,))
 
     def show(self, m, findings):
-        """Refill the list from the manuscript, keeping the selected row."""
         problems = {}
         for f in findings:
             key = f.block_id or {"META-01": "title", "META-02": "authors", "META-03": "abstract",

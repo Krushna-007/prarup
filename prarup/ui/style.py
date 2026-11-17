@@ -1,6 +1,3 @@
-"""Colours and widget styles, in one place. The app is always light, so it
-reads the same on Windows, Linux and a Mac in dark mode."""
-
 import tkinter as tk
 from tkinter import font, ttk
 
@@ -58,7 +55,6 @@ def apply(root: tk.Tk) -> None:
 
 
 def text_box(parent, value: str = "", height: int = 4) -> tk.Text:
-    """A plain multi-line text field, with its colours set so dark mode cannot change them."""
     box = tk.Text(parent, height=height, wrap="word", undo=True, background=PANEL, foreground=INK,
                   insertbackground=INK, selectbackground=SELECTED, selectforeground=INK,
                   relief="flat", highlightthickness=1, highlightbackground=LINE,
