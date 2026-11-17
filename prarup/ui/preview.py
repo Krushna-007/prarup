@@ -3,6 +3,8 @@ from tkinter import ttk
 
 import pymupdf
 
+from prarup.ui.style import LINE
+
 
 class PdfPreview:
     def __init__(self, parent):
@@ -14,9 +16,9 @@ class PdfPreview:
         self.previous.pack(side="left")
         self.next = ttk.Button(pages, text="Next", command=lambda: self.draw(1))
         self.next.pack(side="right")
-        self.page_label = ttk.Label(pages, text="PDF preview", style="Section.TLabel")
+        self.page_label = ttk.Label(pages, text="PDF preview", style="Title.TLabel")
         self.page_label.pack()
-        self.preview_area = tk.Canvas(parent, background="#e1e7ef", highlightthickness=0)
+        self.preview_area = tk.Canvas(parent, background=LINE, highlightthickness=0)
         self.preview_area.pack(fill="both", expand=True)
         self.preview_area.bind("<Configure>", lambda event: self.draw())
 

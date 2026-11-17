@@ -1,379 +1,339 @@
+"""The main window.
+
+    toolbar:  Open · Build · Fit figures · Fix PDF · AI classifier · Export
+    left:     the outline (every block, tagged)
+    middle:   the editor for the chosen block, and the tabs under it
+    right:    the PDF
+
+Slow jobs (open, build, fit, fix, export) run on one background thread so the
+window never freezes. Tkinter is not thread-safe, so the thread only computes;
+the window polls for the result with root.after() and draws it itself.
+"""
+
 import sys
 import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from tkinter import filedialog, messagebox, simpledialog, ttk
-from tkinter.scrolledtext import ScrolledText
+from tkinter import filedialog, messagebox, ttk
 
-from prarup import pandoc
+from prarup import images
 from prarup.checks import run_all_checks
 from prarup.fit import describe
 from prarup.fix import embed_fonts
 from prarup.models import Rules
 from prarup.project import Project
+from prarup.ui import style
+from prarup.ui.editors import editor_for
+from prarup.ui.outline import Outline
+from prarup.ui.panels import Panels
 from prarup.ui.preview import PdfPreview
+
+PAPERS = [("Papers", "*.docx *.tex *.zip")]
+REBUILD_AFTER_MS = 1500
 
 
 class MainWindow:
     def __init__(self, root):
         self.root = root
-        root.title("Prarup")
-        width = min(1050, int(root.winfo_screenwidth() * 0.92))
-        height = min(700, int(root.winfo_screenheight() * 0.85))
-        root.geometry(f"{width}x{height}+40+30")
-        root.minsize(760, 520)
-        background = "#f2f4f7"
-        ink = "#243247"
-        root.configure(background=background)
-        style = ttk.Style(root)
-        style.theme_use("clam")
-        style.configure("TFrame", background=background)
-        style.configure("TLabel", background=background, foreground=ink)
-        style.configure("Section.TLabel", font=("Segoe UI", 11, "bold"))
-        style.configure("TButton", padding=(9, 5), background="#ffffff", foreground=ink)
-        style.map("TButton", background=[("active", "#e5ecf6")])
-        style.configure("Build.TButton", background="#2359a8", foreground="white")
-        style.map("Build.TButton", background=[("disabled", "#e1e6ee"), ("active", "#194681")],
-                  foreground=[("disabled", "#56657b"), ("!disabled", "white")])
         self.project = None
         self.rules = Rules.load(Path(__file__).resolve().parents[1] / "presets" / "ieee.yaml")
         self.worker = ThreadPoolExecutor(max_workers=1)
         self.busy = False
-        self.status = tk.StringVar(root, value="Open a Word or LaTeX manuscript.")
+        self.rebuild_timer = None
+        self.rebuild_waiting = False      # an edit came in while a build was running
+        self.findings, self.key, self.editor = [], None, None
+        self.choose_fit = self.ask_fit    # tests replace this to skip the dialog
+        self.classify = tk.BooleanVar(root, value=False)
+        self.status = tk.StringVar(root, value="Open a Word (.docx), LaTeX (.tex) or zipped LaTeX paper.")
+
+        root.title("Prarup")
+        root.geometry("1440x880")
+        root.minsize(1000, 620)
+        style.apply(root)
         root.protocol("WM_DELETE_WINDOW", self.close)
+        self.make_toolbar()
+        ttk.Label(root, textvariable=self.status, style="Status.TLabel").pack(side="bottom", fill="x")
 
-        bar = ttk.Frame(root, padding=(14, 12))
-        bar.pack(fill="x")
-        self.buttons = []
-        for label, action in [
-            ("Open", self.choose_file), ("Check", self.check), ("Build PDF", self.build),
-            ("Fit figures", self.fit), ("Fix PDF", self.fix), ("Export ZIP", self.export),
-        ]:
-            style_name = "Build.TButton" if label == "Build PDF" else "TButton"
-            button = ttk.Button(bar, text=label, command=action, style=style_name)
-            button.pack(side="left", padx=(0, 5))
-            self.buttons.append(button)
-
-        ttk.Label(root, textvariable=self.status, anchor="w", padding=(14, 8)).pack(side="bottom", fill="x")
-        panes = tk.PanedWindow(root, sashwidth=10, background=background, borderwidth=0)
-        panes.pack(fill="both", expand=True, padx=14)
-        left = ttk.Frame(panes, padding=(0, 0, 6, 0))
-        right = ttk.Frame(panes)
-        panes.add(left, width=462, minsize=400)
-        panes.add(right, minsize=300)
-
-        ttk.Label(left, text="Manuscript", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
-        outline = ttk.Frame(left)
-        outline.pack(fill="x")
-        scroll = ttk.Scrollbar(outline)
-        scroll.pack(side="right", fill="y")
-        self.outline = tk.Listbox(outline, height=9, yscrollcommand=scroll.set, exportselection=False,
-                                  foreground=ink, selectbackground="#2359a8", selectforeground="white",
-                                  borderwidth=0, highlightthickness=1, highlightbackground="#ccd5e1",
-                                  highlightcolor="#2359a8", activestyle="none")
-        self.outline.pack(fill="x")
-        scroll.config(command=self.outline.yview)
-        self.outline.bind("<Double-Button-1>", lambda event: self.edit())
-        actions = ttk.Frame(left)
-        actions.pack(fill="x", pady=(7, 12))
-        for label, command in [
-            ("Edit", self.edit), ("Image", self.image), ("Add", self.add),
-            ("Up", lambda: self.move(-1)), ("Down", lambda: self.move(1)),
-            ("Delete", self.delete),
-        ]:
-            button = ttk.Button(actions, text=label, command=command, width=7)
-            button.pack(side="left", padx=(0, 3))
-            self.buttons.append(button)
-
-        ttk.Label(left, text="Report", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
-        self.report = ScrolledText(left, wrap="word", height=12, state="disabled", foreground=ink,
-                                   background="white", borderwidth=0, highlightthickness=1,
-                                   highlightbackground="#ccd5e1", padx=10, pady=8,
-                                   font=("Segoe UI", 10))
-        self.report.pack(fill="both", expand=True)
+        columns = ttk.PanedWindow(root, orient="horizontal")
+        columns.pack(fill="both", expand=True)
+        self.outline = Outline(columns, self.show_block)
+        middle = ttk.PanedWindow(columns, orient="vertical")
+        self.editor_area = ttk.Frame(middle)
+        self.panels = Panels(middle, self.jump)
+        middle.add(self.editor_area, weight=3)
+        middle.add(self.panels, weight=2)
+        right = ttk.Frame(columns, padding=6)
         self.preview = PdfPreview(right)
+        columns.add(self.outline, weight=2)
+        columns.add(middle, weight=4)
+        columns.add(right, weight=3)
+        self.middle = middle
+        root.after(200, self.place_dividers)
         self.enable()
 
-    def enable(self):
-        for i, button in enumerate(self.buttons):
-            ready = not self.busy and (i == 0 or self.project is not None)
-            button.config(state="normal" if ready else "disabled")
+    def place_dividers(self):
+        """Give the editor about 60% of the middle column, the tabs the rest."""
+        self.root.update_idletasks()
+        self.middle.sashpos(0, int(self.middle.winfo_height() * 0.6))
 
-    def run(self, text, task, done):
+    def make_toolbar(self):
+        bar = ttk.Frame(self.root, style="Bar.TFrame", padding=(10, 8))
+        bar.pack(fill="x")
+        ttk.Label(bar, text="प्रारूप Prarup", style="Brand.TLabel").pack(side="left", padx=(0, 14))
+        self.buttons = {}
+        for name, command in [("Open", self.choose_file), ("Build", self.build),
+                              ("Fit figures", self.fit), ("Fix PDF", self.fix),
+                              ("Export", self.export)]:
+            button = ttk.Button(bar, text=name, command=command, width=len(name) + 2,
+                                style="Accent.TButton" if name == "Build" else "TButton")
+            button.pack(side="left", padx=(0, 4))
+            self.buttons[name] = button
+        ai = ttk.Checkbutton(bar, text="AI classifier", variable=self.classify, command=self.toggle_ai)
+        ai.pack(side="left", padx=10)
+        if not images.classifier_installed():
+            ai.configure(state="disabled", text="AI classifier (not installed)")
+        self.file_label = ttk.Label(bar, text="", style="File.TLabel")
+        self.file_label.pack(side="right")
+
+    # ---- background jobs ---------------------------------------------------
+
+    def enable(self):
+        for name, button in self.buttons.items():
+            ready = not self.busy and (name == "Open" or self.project is not None)
+            if name == "Fix PDF":
+                ready = ready and self.preview.pdf is not None
+            button.configure(state="normal" if ready else "disabled")
+
+    def run(self, message, job, done):
+        """Run job() on the background thread, then done(result) on the window."""
         if self.busy:
             return
         self.busy = True
         self.enable()
-        self.status.set(text)
-        future = self.worker.submit(task)
+        self.status.set(message)
+        future = self.worker.submit(job)
 
-        def finish():
+        def check():
             if not future.done():
-                self.root.after(80, finish)
+                self.root.after(80, check)
                 return
             self.busy = False
-            self.enable()
             try:
                 done(future.result())
             except Exception as error:
-                self.status.set("Operation failed")
-                messagebox.showerror("Prarup", str(error), parent=self.root)
+                self.status.set("Failed: " + str(error).splitlines()[0][:120])
+                messagebox.showerror("Prarup", str(error)[:2000], parent=self.root)
+            self.enable()
+            if self.rebuild_waiting:
+                self.rebuild_waiting = False
+                self.build()
 
-        self.root.after(80, finish)
+        self.root.after(80, check)
 
     def close(self):
         if self.busy:
-            messagebox.showinfo("Prarup", "Wait for the current operation to finish.", parent=self.root)
+            messagebox.showinfo("Prarup", "Wait for the current job to finish.", parent=self.root)
             return
         self.worker.shutdown()
         self.root.destroy()
 
+    # ---- opening and showing -----------------------------------------------
+
     def choose_file(self):
-        path = filedialog.askopenfilename(parent=self.root, filetypes=[("Manuscripts", "*.docx *.tex *.zip")])
+        path = filedialog.askopenfilename(parent=self.root, filetypes=PAPERS)
         if path:
             self.open_file(Path(path))
 
     def open_file(self, path):
-        self.run("Opening manuscript...", lambda: Project.open(path), self.opened)
+        self.save_editor(quiet=True)
+        self.run(f"Opening {Path(path).name}…", lambda: Project.open(Path(path)), self.opened)
 
     def opened(self, project):
-        self.project = project
+        self.project, self.key = project, None
         self.root.title(f"Prarup - {project.source.name}")
+        self.file_label.configure(text=f"{project.source.name}  ·  IEEE Conference")
         self.preview.load()
-        self.refresh("")
-        self.check()
+        self.panels.show_checks([])
+        self.refresh()
+        self.outline.select("title")
+        self.status.set(f"Opened {project.source.name}: {len(self.findings)} item(s) to look at. "
+                        "Click Build for the PDF.")
+        self.schedule_build(0)
 
-    def refresh(self, key=None):
-        if key is None and self.outline.curselection():
-            key = self.keys[self.outline.curselection()[0]]
-        m = self.project.m
-        self.keys = ["title", "authors", "abstract", "keywords"] + [b.id for b in m.blocks]
-        self.outline.delete(0, "end")
-        for name in self.keys[:4]:
-            self.outline.insert("end", name.title())
-        for block in m.blocks:
-            text = block.caption or block.text or " ".join(block.images)
-            title = " ".join(text.split())[:60]
-            self.outline.insert("end", f"{block.kind.title()}  {title}")
-        if key in self.keys:
-            row = self.keys.index(key)
-            self.outline.selection_set(row)
-            self.outline.see(row)
-
-    def selection(self):
-        rows = self.outline.curselection()
-        return self.keys[rows[0]] if rows else None
-
-    def edit(self):
-        if self.busy or not self.project or not self.selection():
-            return
-        key = self.selection()
-        project = self.project
-        block = project.m.find(key)
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Edit " + (block.kind if block else key))
-        dialog.transient(self.root)
-        dialog.grab_set()
-        kind = None
-        if block is None:
-            value = getattr(project.m, key)
-            if key == "authors":
-                tk.Label(dialog, text="One author per line: name | affiliation").pack()
-                value = "\n".join(f"{a.name} | {a.affiliation}" for a in value)
-        elif block.kind in ("figure", "table"):
-            tk.Label(dialog, text="Caption").pack()
-            value = block.caption
-        elif block.kind == "references":
-            value = "\n".join(block.entries)
+    def refresh(self):
+        """Run the checks on the manuscript, then redraw the outline, tabs and editor."""
+        self.findings = self.project.findings(self.classify.get())
+        self.outline.show(self.project.m, self.findings)
+        self.panels.show_findings(self.findings, self.project.reports, self.project.m.notes)
+        if self.key and (self.key in ("title", "authors", "abstract", "keywords")
+                         or self.project.m.find(self.key)):
+            self.make_editor(self.key)
         else:
-            value = block.text
-            if block.kind in ("heading", "para", "quote"):
-                kind = tk.StringVar(dialog, value=block.kind)
-                tk.OptionMenu(dialog, kind, "para", "heading", "quote").pack()
-        field = ScrolledText(dialog, width=64, height=12, wrap="word")
-        field.insert("1.0", value)
-        field.pack(padx=8, pady=8)
-        if block and block.kind == "references" and project.m.bibliography:
-            field.config(state="disabled")
+            self.make_editor(None)
+
+    def show_block(self, key):
+        """The outline was clicked."""
+        if key == self.key:
             return
+        message = self.save_editor(quiet=True)
+        if message:
+            self.refresh_after_edit(message, key)
+        else:
+            self.make_editor(key)
 
-        def save():
-            value = field.get("1.0", "end-1c").strip()
-            try:
-                if key == "authors":
-                    rows = [line.partition("|") for line in value.splitlines() if line.strip()]
-                    authors = [(name.strip(), affiliation.strip()) for name, _, affiliation in rows if name.strip()]
-                    project.set_front(authors=authors)
-                elif block is None:
-                    project.set_front(**{key: value})
-                elif block.kind in ("figure", "table"):
-                    project.set_caption(key, value)
-                elif block.kind == "references":
-                    lines = [line.strip() for line in value.splitlines() if line.strip()]
-                    if block.keys and len(lines) != len(block.entries):
-                        raise ValueError("Keep one line per existing citation key.")
-                    block.entries = lines
-                    project.save()
-                else:
-                    project.set_text(key, value)
-                    if kind and kind.get() != block.kind:
-                        project.set_kind(key, kind.get())
-            except (OSError, ValueError) as error:
-                messagebox.showerror("Prarup", str(error), parent=dialog)
-                return
-            dialog.destroy()
-            self.changed(key)
+    def make_editor(self, key):
+        if self.editor is not None:
+            self.editor.destroy()
+        self.key, self.editor = key, None
+        if key:
+            self.editor = editor_for(self.editor_area, self, key, self.findings, self.project.reports)
+            self.editor.pack(fill="both", expand=True)
 
-        tk.Button(dialog, text="Save", command=save).pack(pady=(0, 8))
-        if block and block.kind == "table" and block.node:
-            tk.Button(dialog, text="Edit a cell", command=lambda: self.edit_cell(dialog, block, save)).pack()
-        field.focus_set()
+    def jump(self, block_id):
+        """A row in a tab was clicked: open its block."""
+        self.outline.select(block_id)
+        self.show_block(block_id)
 
-    def edit_cell(self, dialog, block, save):
-        rows, _ = pandoc.table_rows(block.node[0])
-        if not rows:
-            return
-        row = simpledialog.askinteger("Table", "Row number", minvalue=1, maxvalue=len(rows), parent=dialog)
-        if row is None or not rows[row - 1][1]:
-            return
-        cells = rows[row - 1][1]
-        column = simpledialog.askinteger("Table", "Column number", minvalue=1, maxvalue=len(cells), parent=dialog)
-        if column is not None:
-            cell = cells[column - 1]
-            old = pandoc.stringify(cell[4]).replace("\n", " ")
-            text = simpledialog.askstring("Table", "Cell text", initialvalue=old, parent=dialog)
-            if text is not None and text != old:
-                cell[4] = [{"t": "Plain", "c": [{"t": "Str", "c": text}]}]
-                save()
+    # ---- edits -------------------------------------------------------------
 
-    def changed(self, key=None):
-        self.refresh(key)
-        self.preview.load()
-        self.check()
+    def save_editor(self, quiet=False):
+        """Save what is typed in the editor. Returns the message ("" if nothing changed)."""
+        if self.editor is None:
+            return ""
+        try:
+            message = self.editor.save()
+        except ValueError as error:
+            messagebox.showerror("Prarup", str(error), parent=self.root)
+            return ""
+        if not quiet:
+            if message:
+                self.refresh_after_edit(message)
+            else:
+                self.status.set("Nothing to save.")
+        return message
 
-    def image(self):
-        block = self.project.m.find(self.selection())
-        if not block or block.kind != "figure":
-            return
-        index = 0
-        if block.images:
-            names = "\n".join(f"{i}. {Path(path).name}" for i, path in enumerate(block.images, 1))
-            number = simpledialog.askinteger("Image", names + "\nChoose an image to replace, or 0 to add.",
-                                             minvalue=0, maxvalue=len(block.images), parent=self.root)
-            if number is None:
-                return
-            index = number - 1 if number else len(block.images)
-        path = filedialog.askopenfilename(parent=self.root)
-        if path:
-            self.project.set_image(block.id, Path(path), index)
-            self.changed(block.id)
-
-    def add(self):
-        kind = simpledialog.askstring("Add a block", "Enter para, heading, or figure.", parent=self.root)
-        if kind in ("para", "heading", "figure"):
-            block = self.project.m.find(self.selection())
-            added = self.project.insert(block.id if block else None, kind)
-            self.changed(added.id)
+    def refresh_after_edit(self, message, key=None):
+        if key:
+            self.key = key
+        self.refresh()
+        if self.key:
+            self.outline.select(self.key)
+        self.status.set(message + " Rebuilding the PDF shortly…")
+        self.schedule_build()
 
     def move(self, step):
-        block = self.project.m.find(self.selection())
-        if block:
-            self.project.move(block.id, step)
-            self.changed(block.id)
+        self.save_editor(quiet=True)
+        self.project.move(self.key, step)
+        self.refresh_after_edit("Moved.")
 
-    def delete(self):
-        block = self.project.m.find(self.selection())
-        if block and messagebox.askyesno("Delete", "Delete the selected block?", parent=self.root):
-            self.project.delete(block.id)
-            self.changed("title")
+    def insert(self, kind):
+        self.save_editor(quiet=True)
+        block = self.project.insert(self.key, kind, "New paragraph." if kind == "para" else "")
+        self.refresh_after_edit(f"Added a {kind}.", block.id)
 
-    def show_report(self, items, extra=""):
-        lines = [f"{item.severity.upper()} {item.code}: {item.message}" for item in items]
-        self.report.config(state="normal")
-        self.report.delete("1.0", "end")
-        self.report.insert("1.0", "\n\n".join(lines + ([extra] if extra else [])) or "No issues found.")
-        self.report.config(state="disabled")
+    def delete_block(self):
+        if messagebox.askyesno("Delete", "Delete this block?", parent=self.root):
+            self.project.delete(self.key)
+            self.key = None
+            self.refresh_after_edit("Deleted.")
 
-    def check(self):
+    def set_image(self, file, index):
+        self.save_editor(quiet=True)
+        self.project.set_image(self.key, file, index)
+        self.refresh_after_edit("Image saved.")
 
-        def done(items):
-            result = self.project.last_build if self.preview.pdf else None
-            self.show_report(items + (result.issues if result else []))
-            self.status.set("Manuscript checked." if result else "Manuscript checked. Click Build PDF for PDF checks.")
-        self.run("Checking manuscript...", self.project.findings, done)
+    def remove_image(self, index):
+        self.save_editor(quiet=True)
+        self.project.remove_image(self.key, index)
+        self.refresh_after_edit("Image removed.")
+
+    def toggle_ai(self):
+        if self.project:
+            self.refresh()
+            self.status.set("AI classifier on: it runs on photos, never on charts."
+                            if self.classify.get() else "AI classifier off.")
+
+    # ---- build, fit, fix, export -------------------------------------------
+
+    def schedule_build(self, delay=REBUILD_AFTER_MS):
+        """Build a moment after the last edit, so typing does not start many builds."""
+        if self.rebuild_timer:
+            self.root.after_cancel(self.rebuild_timer)
+        self.rebuild_timer = self.root.after(delay, self.build)
 
     def build(self):
-        self.preview.load()
+        self.rebuild_timer = None
+        if self.project is None:
+            return
+        if self.busy:
+            self.rebuild_waiting = True
+            return
+        self.save_editor(quiet=True)
+        self.run("Building the IEEE PDF…", lambda: self.project.build(self.rules), self.built)
 
-        def task():
-            return self.project.build(self.rules), self.project.findings()
-        self.run("Building PDF...", task, self.built)
-
-    def built(self, data):
-        result, findings = data
+    def built(self, result):
         self.preview.load(result.pdf)
-        self.show_report(findings + result.issues, "" if result.ok else result.log)
-        self.status.set(f"Built PDF. {result.pages} pages." if result.ok else "PDF build failed.")
+        self.panels.show_checks(result.issues)
+        if result.ok:
+            self.status.set(f"Built: {result.pages} pages, {len(result.issues)} PDF check(s), "
+                            f"{len(self.findings)} item(s) in Missing and Images.")
+        else:
+            self.status.set("The PDF did not build. See the message.")
+            messagebox.showerror("LaTeX error", result.log[-2000:], parent=self.root)
 
     def fit(self):
-        def done(options):
-            chosen = options[0]
-            if len(options) > 1:
-                text = f"Use the layout with {options[1].pages_after} pages? Choose No to keep the more readable layout."
-                if messagebox.askyesno("Fit figures", text, parent=self.root):
-                    chosen = options[1]
-            self.project.apply_fit(chosen)
-            messagebox.showinfo("Fit figures", "\n".join(describe(chosen)), parent=self.root)
-            self.build()
-        self.run("Fitting figures...", lambda: self.project.fit(self.rules), done)
+        self.save_editor(quiet=True)
+        self.run("Fitting figures: compiling a few layouts…", lambda: self.project.fit(self.rules),
+                 self.fitted)
+
+    def fitted(self, options):
+        chosen = options[0] if len(options) == 1 else self.choose_fit(*options)
+        if chosen is None:
+            self.status.set("Figures left as they were.")
+            return
+        self.project.apply_fit(chosen)
+        self.panels.show_fit(describe(chosen))
+        self.refresh()
+        self.status.set("Figures fitted. Building…")
+        self.root.after(0, self.build)
+
+    def ask_fit(self, readable, within):
+        answer = messagebox.askyesnocancel(
+            "Fit figures",
+            f"Readable figures need {readable.pages_after} pages, over the limit of "
+            f"{readable.page_limit}.\nSmaller figures fit in {within.pages_after} pages, "
+            "but some text falls below the minimum size.\n\n"
+            "Yes: readable figures.   No: stay within the page limit.",
+            parent=self.root)
+        if answer is None:
+            return None
+        return readable if answer else within
 
     def fix(self):
-        if not self.preview.pdf:
-            messagebox.showinfo("Fix PDF", "Build the PDF first.", parent=self.root)
-            return
         result = self.project.last_build
-        repairable = sum(issue.can_fix for issue in result.issues)
-        if not repairable:
-            text = "This PDF has no issues that Fix PDF can repair."
-            self.status.set(text)
-            messagebox.showinfo(
-                "Fix PDF",
-                text + "\n\nUse the manuscript editor for missing captions or references, "
-                "and review the report for any other findings.",
-                parent=self.root,
-            )
+        if not any(issue.can_fix for issue in result.issues):
+            messagebox.showinfo("Fix PDF", "Nothing in this PDF can be repaired automatically. "
+                                "Fix the items in Missing with the editor.", parent=self.root)
             return
-        destination = result.pdf.with_name("paper-fixed.pdf")
+        fixed = result.pdf.with_name("paper-fixed.pdf")
 
-        def task():
-            embed_fonts(self.project.folder / "build" / "paper.pdf", destination)
-            issues = run_all_checks(destination, self.rules)
-            result.pdf = destination
-            result.issues = issues
-            return result, self.project.findings()
-
-        def done(data):
-            self.built(data)
-            remaining = sum(issue.can_fix for issue in result.issues)
-            if remaining:
-                detail = f"{remaining} repairable PDF issue(s) remain. See the report."
-            else:
-                detail = f"Cleared {repairable} repairable PDF issue(s)."
-            self.status.set(f"Saved {destination.name}. {detail}")
-
-        self.run("Repairing PDF...", task, done)
+        def job():
+            embed_fonts(result.pdf, fixed)
+            result.pdf, result.issues = fixed, run_all_checks(fixed, self.rules)
+            return result
+        self.run("Repairing the PDF with Ghostscript…", job, self.built)
 
     def export(self):
         path = filedialog.asksaveasfilename(parent=self.root, defaultextension=".zip",
-                                          filetypes=[("Submission archive", "*.zip")])
+                                            initialfile=f"{self.project.source.stem}-submission.zip",
+                                            filetypes=[("Zip", "*.zip")])
         if path:
-            self.preview.load()
+            self.export_to(Path(path))
 
-            def done(saved):
-                self.preview.load(self.project.last_build.pdf)
-                self.status.set(f"Saved {saved.name}")
-
-            self.run("Exporting...", lambda: self.project.export(Path(path), self.rules), done)
+    def export_to(self, path):
+        self.save_editor(quiet=True)
+        self.run("Exporting…", lambda: self.project.export(path, self.rules),
+                 lambda saved: self.status.set(f"Saved {saved.name}: PDF, LaTeX, images and report."))
 
 
 def main():

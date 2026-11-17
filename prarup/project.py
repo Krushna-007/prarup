@@ -145,6 +145,10 @@ class Project:
         block.fit_width = ""
         self.save()
 
+    def remove_image(self, block_id: str, index: int) -> None:
+        del self._block(block_id).images[index]
+        self.save()
+
     def findings(self, classify: bool = False) -> list[Finding]:
         self.reports = images.inspect(self.m, self.folder, classify)
         return analyze(self.m, self.folder) + images.findings(self.reports)
