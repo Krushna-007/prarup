@@ -27,7 +27,7 @@ def test_svm_damage_is_found_and_edits_clear_findings(project, tmp_path):
     paper = project("svm_messy.docx")
     findings = paper.findings()
     codes = {item.code for item in findings}
-    assert {"META-03", "META-04", "FIG-01", "FIG-03", "IMG-01", "IMG-05"} <= codes
+    assert {"META-03", "META-04", "FIG-01", "FIG-03", "IMG-01", "IMG-02", "IMG-05"} <= codes
     paper.set_front(abstract="We classify diabetes with a support vector machine.",
                     keywords="SVM, diabetes, PIMA")
     plot = FIXTURES / "latex_project" / "figs" / "accuracy.png"
